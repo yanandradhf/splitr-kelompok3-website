@@ -9,7 +9,7 @@ import {
   getPaymentMethods,
   getDailyAmount,
   periodMap,
-} from '@/lib/api';
+} from '../../lib/api';
 
 // ---------- Small UI pieces ----------
 function FilterSelect({ value, onChange, options }) {
@@ -171,23 +171,20 @@ const paymentColor = (name) => {
 
 // ---------- Mappers respons API -> shape chart ----------
 const mapTransactions = (json) => {
-  const arr = json?.data ?? json ?? [];
-  return arr.map((it, i) => ({
-    label: it.label ?? it.day ?? it.date ?? it.month ?? String(i + 1),
-    value: Number(it.value ?? it.count ?? it.total ?? 0),
+  const arr = json?.data ?? [];
+  return arr.map((it) => ({
+    label: it.label,
+    value: Number(it.transactions ?? 0),
   }));
 };
 
 const mapCategories = (json) => {
-  const arr = json?.data ?? json ?? [];
-  const raw = arr.map((it, i) => ({
-    name: it.name ?? it.category ?? `Category ${i + 1}`,
-    rawValue: Number(it.value ?? it.count ?? it.total ?? 0),
-  }));
-  const total = raw.reduce((s, x) => s + (isFinite(x.rawValue) ? x.rawValue : 0), 0) || 1;
-  return raw.map((x, i) => ({
-    name: x.name,
-    value: Number(((x.rawValue * 100) / total).toFixed(1)),
+  const arr = json?.data ?? [];
+  console.log('Raw categories data:', arr);
+  
+  return arr.map((it, i) => ({
+    name: it.category === 'Other' ? 'Others' : it.category,
+    value: Number(it.percentage || 0),
     color: CAT_COLORS[i % CAT_COLORS.length],
   }));
 };
@@ -242,70 +239,72 @@ export default function Dashboard() {
 
   // ---------- EFFECT: Transactions (line) ----------
   useEffect(() => {
-    const ac = new AbortController();
     (async () => {
       try {
         setTrendLoading(true); setTrendError('');
-        const json = await getTransactions(periodMap[trendRange], { signal: ac.signal });
-        setTrendData(mapTransactions(json));
+        console.log('Fetching trends for period:', periodMap[trendRange]);
+        const json = await getTransactions(periodMap[trendRange]);
+        console.log('Trends API response:', json);
+        const mapped = mapTransactions(json);
+        console.log('Mapped trends data:', mapped);
+        setTrendData(mapped);
       } catch (e) {
-        if (e.name !== 'AbortError') setTrendError(e.message || 'fetch error');
+        console.error('Trends API error:', e);
+        setTrendError(e.response?.data?.message || e.message || 'fetch error');
       } finally {
         setTrendLoading(false);
       }
     })();
-    return () => ac.abort();
   }, [trendRange]);
 
   // ---------- EFFECT: Categories (pie) ----------
   useEffect(() => {
-    const ac = new AbortController();
     (async () => {
       try {
         setCatLoading(true); setCatError('');
-        const json = await getCategories(periodMap[catRange], { signal: ac.signal });
-        setCategoriesData(mapCategories(json));
+        console.log('Fetching categories for period:', periodMap[catRange]);
+        const json = await getCategories(periodMap[catRange]);
+        console.log('Categories API response:', json);
+        const mapped = mapCategories(json);
+        console.log('Mapped categories data:', mapped);
+        setCategoriesData(mapped);
       } catch (e) {
-        if (e.name !== 'AbortError') setCatError(e.message || 'fetch error');
+        console.error('Categories API error:', e);
+        setCatError(e.response?.data?.message || e.message || 'fetch error');
       } finally {
         setCatLoading(false);
       }
     })();
-    return () => ac.abort();
   }, [catRange]);
 
   // ---------- EFFECT: Payment Methods (pie) ----------
   useEffect(() => {
-    const ac = new AbortController();
     (async () => {
       try {
         setPayLoading(true); setPayError('');
-        const json = await getPaymentMethods(periodMap[payRange], { signal: ac.signal });
+        const json = await getPaymentMethods(periodMap[payRange]);
         setPaymentData(mapPaymentMethods(json));
       } catch (e) {
-        if (e.name !== 'AbortError') setPayError(e.message || 'fetch error');
+        setPayError(e.response?.data?.message || e.message || 'fetch error');
       } finally {
         setPayLoading(false);
       }
     })();
-    return () => ac.abort();
   }, [payRange]);
 
   // ---------- EFFECT: Daily/Monthly Amount Split (bar) ----------
   useEffect(() => {
-    const ac = new AbortController();
     (async () => {
       try {
         setAmountLoading(true); setAmountError('');
-        const json = await getDailyAmount(periodMap[amountRange], { signal: ac.signal });
+        const json = await getDailyAmount(periodMap[amountRange]);
         setAmountData(mapDailyAmount(json));
       } catch (e) {
-        if (e.name !== 'AbortError') setAmountError(e.message || 'fetch error');
+        setAmountError(e.response?.data?.message || e.message || 'fetch error');
       } finally {
         setAmountLoading(false);
       }
     })();
-    return () => ac.abort();
   }, [amountRange]);
 
   // ---------- Summary (sementara tetap statis) ----------
