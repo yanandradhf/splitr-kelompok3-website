@@ -1,24 +1,25 @@
-import axios from 'axios';
-
-const BASE = 'https://533c27f18d6b.ngrok-free.app/api/admin/dashboard/charts';
+import axios from "axios";
+const BASEAPI = process.env.NEXT_PUBLIC_API_BASE;
+const BASE = BASEAPI + "/api/admin/dashboard/charts";
 
 export const periodMap = {
-  '7d': '7days',
-  '30d': '30days', 
-  'this_month': 'thismonth',
-  'full_year': 'year',
+  "7d": "7days",
+  "30d": "30days",
+  this_month: "thismonth",
+  full_year: "year",
 };
 
 const api = axios.create({
   baseURL: BASE,
   headers: {
-    'Accept': 'application/json',
-    'ngrok-skip-browser-warning': 'true'
-  }
+    Accept: "application/json",
+    "ngrok-skip-browser-warning": "true",
+  },
 });
 
 api.interceptors.request.use((config) => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
