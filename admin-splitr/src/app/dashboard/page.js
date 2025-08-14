@@ -1,12 +1,26 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '../components/Sidebar';
 import AuthGuard from '../components/AuthGuard';
+import Cookies from 'js-cookie';
 
 export default function Dashboard() {
   const router = useRouter();
-  const [user] = useState({ name: 'John Doe', role: 'User' });
+  const [user, setUser] = useState({ name: 'Loading...', role: 'User' });
+  const [isOpen, setIsOpen] = useState(false);
+  
+  // Load user data from localStorage
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      const parsedUser = JSON.parse(userData);
+      setUser({ 
+        name: parsedUser.name || parsedUser.username || 'Admin', 
+        role: parsedUser.role || 'Admin' 
+      });
+    }
+  }, []);
   
   // Chart data - can be replaced with API data
   const [expenseCategories] = useState([
@@ -32,35 +46,58 @@ export default function Dashboard() {
     return 251.2 - (startPercentage / 100) * 251.2;
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    router.push('/');
+  const handleLogout = async () => {
+    try {
+      const sessionId = localStorage.getItem('sessionId');
+      if (sessionId) {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId })
+        });
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('sessionId');
+      router.push('/');
+    }
   };
 
   return (
     <AuthGuard>
-      <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <Sidebar />
-      
-      {/* Main Content */}
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <header className="bg-white shadow-sm border-b">
+      <Sidebar isOpen={isOpen} setIsOpen={setIsOpen} />
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        
+        {/* Main Content */}
+        <div className="flex flex-col min-h-screen transition-all duration-300" style={{marginLeft: isOpen ? '256px' : '0px'}}>
+          {/* Header */}
+        <header className="bg-white border-b sticky top-0 z-10">
           <div className="px-6">
-            <div className="flex justify-between items-center h-16">
-              <div className="flex items-center ml-16">
-                <span className="text-lg font-semibold text-gray-900">Dashboard</span>
+            <div className="flex justify-between items-center h-24">
+              <div className="flex flex-col ml-16">
+                <span className="text-xl font-semibold text-gray-900">Dashboard Monitoring</span>
+                <span className="text-sm text-gray-500 mt-1">Overview of transaction performance and statistics.</span>
               </div>
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-600">Welcome, {user.name}</span>
+              <div className="flex items-center space-x-3">
+                <img 
+                  src="/assets/profile.jpg" 
+                  alt="Profile" 
+                  className="w-8 h-8 rounded-full object-cover border-2 border-gray-200"
+                  onError={(e) => {
+                    e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiNGM0Y0RjYiLz4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI4IiB5PSI4Ij4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggOEE0IDQgMCAxIDAgOCAwYTQgNCAwIDAgMCAwIDhaTTggMTBjLTQuNDIgMC04IDMuNTgtOCA4aDEuNWMwLTMuNTggMi45Mi02LjUgNi41LTYuNXM2LjUgMi45MiA2LjUgNi41SDE2Yy0wLTQuNDItMy41OC04LTgtOFoiIGZpbGw9IiM5Q0E0QUYiLz4KPC9zdmc+Cjwvc3ZnPgo8L3N2Zz4K';
+                  }}
+                />
+                <span className="text-sm font-medium text-gray-900">{user.name}</span>
               </div>
             </div>
           </div>
         </header>
 
         {/* Dashboard Content */}
-        <main className="flex-1 overflow-auto px-6 py-8">
+        <main className="flex-1 px-6 py-8">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
@@ -284,8 +321,8 @@ export default function Dashboard() {
           </div>
         </div>
         </main>
+        </div>
       </div>
-    </div>
     </AuthGuard>
   );
 }

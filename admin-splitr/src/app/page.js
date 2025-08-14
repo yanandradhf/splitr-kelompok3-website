@@ -1,6 +1,8 @@
 'use client';
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { RiEyeLine, RiEyeOffLine } from 'react-icons/ri';
+import Cookies from 'js-cookie';
 
 export default function SplitrLogin() {
   const [username, setUsername] = useState('');
@@ -36,6 +38,12 @@ export default function SplitrLogin() {
     };
   }, []);
 
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleLogin();
+    }
+  };
+
   const handleLogin = async () => {
     if (!username || !password) {
       alert('Please fill in all fields');
@@ -45,28 +53,51 @@ export default function SplitrLogin() {
     setIsLoading(true);
     
     try {
-      // Demo authentication - replace with real API
-      const validCredentials = [
-        { username: 'admin', password: 'admin123', role: 'admin' },
-        { username: 'user', password: 'user123', role: 'user' },
-        { username: 'demo', password: 'demo123', role: 'user' }
-      ];
+      console.log('Attempting login with:', { username, password });
       
-      const user = validCredentials.find(
-        cred => cred.username === username && cred.password === password
-      );
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ username, password })
+      });
+
+      console.log('Response status:', response.status);
       
-      if (user) {
-        const token = 'demo-token-' + Date.now();
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify({ 
-          username: user.username, 
-          role: user.role,
-          loginTime: new Date().toISOString()
-        }));
+      const data = await response.json();
+      console.log('Response data:', data);
+
+      if (response.ok) {
+        // Store admin data in cookies
+        console.log('Setting cookies with data:', data);
+        
+        if (data.sessionId) {
+          Cookies.set('sessionId', data.sessionId, { expires: 1, path: '/' });
+          console.log('SessionId cookie set:', Cookies.get('sessionId'));
+        }
+        
+        // Create user data from response or fallback
+        const userData = data.admin || data.user || data.data || {
+          username: username,
+          name: data.name || username,
+          role: data.role || 'Admin',
+          id: data.id || 1
+        };
+        
+        console.log('User data to store:', userData);
+        Cookies.set('user', JSON.stringify(userData), { expires: 1, path: '/' });
+        console.log('User cookie set:', Cookies.get('user'));
+        
+        console.log('Login successful, redirecting to dashboard');
+        console.log('SessionId cookie:', Cookies.get('sessionId'));
+        console.log('User cookie:', Cookies.get('user'));
+        
+        // Use router.push for proper Next.js navigation
         router.push('/dashboard');
       } else {
-        alert('Invalid username or password');
+        console.error('Login failed:', data);
+        alert(data.error || data.message || 'Login failed');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -132,8 +163,10 @@ export default function SplitrLogin() {
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
+                    onKeyPress={handleKeyPress}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors text-gray-900 bg-white placeholder-gray-400"
                     placeholder="Enter your username or email"
+                    suppressHydrationWarning
                   />
                 </div>
 
@@ -147,15 +180,18 @@ export default function SplitrLogin() {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onKeyPress={handleKeyPress}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors pr-12 text-gray-900 bg-white placeholder-gray-400"
                       placeholder="Enter your password"
+                      suppressHydrationWarning
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 text-sm"
+                      suppressHydrationWarning
                     >
-                      {showPassword ? '🙈' : '👁️'}
+                      {showPassword ? <RiEyeLine  size={20} /> : <RiEyeOffLine size={20} />}
                     </button>
                   </div>
                 </div>
@@ -174,6 +210,7 @@ export default function SplitrLogin() {
                   <button 
                     onClick={handleForgotPassword}
                     className="text-sm text-orange-500 hover:text-orange-600"
+                    suppressHydrationWarning
                   >
                     Forgot Password?
                   </button>
@@ -184,6 +221,7 @@ export default function SplitrLogin() {
                   onClick={handleLogin}
                   disabled={isLoading}
                   className="w-full bg-orange-500 text-white py-2.5 rounded-md font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  suppressHydrationWarning
                 >
                   {isLoading ? 'LOGGING IN...' : 'LOG IN'}
                 </button>
@@ -195,16 +233,13 @@ export default function SplitrLogin() {
                 <button
                   onClick={handleSSOLogin}
                   className="w-full bg-white border border-blue-500 text-blue-600 py-2.5 rounded-md font-medium hover:bg-blue-50 transition-colors flex items-center justify-center"
+                  suppressHydrationWarning
                 >
                   <span className="mr-2">🏢</span>
                   Login with BNI SSO
                 </button>
 
-                {/* Demo Credentials */}
-                <div className="text-center mt-4 p-3 bg-gray-50 rounded-md">
-                  <p className="text-xs text-gray-600 mb-2">Demo Credentials:</p>
-                  <p className="text-xs text-gray-500">admin/admin123 | user/user123 | demo/demo123</p>
-                </div>
+
               </div>
             </div>
           </div>
