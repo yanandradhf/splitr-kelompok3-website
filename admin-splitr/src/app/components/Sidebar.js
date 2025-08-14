@@ -1,11 +1,13 @@
 'use client';
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Cookies from 'js-cookie';
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isDashboardOpen, setIsDashboardOpen] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const menuItems = [
     {
@@ -15,7 +17,14 @@ export default function Sidebar() {
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
         </svg>
-      )
+      ),
+      hasSubMenu: true,
+      subMenuItems: [
+        { name: 'Transaction Trends', path: '/dashboard' },
+        { name: 'Daily Amount Split', path: '/dashboard' },
+        { name: 'Payment Methods', path: '/dashboard' },
+        { name: 'User Retention', path: '/dashboard' }
+      ]
     },
     {
       name: 'Transactions',
@@ -28,62 +37,102 @@ export default function Sidebar() {
     }
   ];
 
+  const handleLogout = async () => {
+    try {
+      const sessionId = Cookies.get('sessionId');
+      if (sessionId) {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId })
+        });
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      Cookies.remove('sessionId');
+      Cookies.remove('user');
+      Cookies.remove('token');
+      router.push('/');
+    }
+  };
+
   return (
-    <>
-      {/* Hamburger Menu Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 p-2 bg-white rounded-md shadow-md hover:bg-gray-50 transition-colors"
-      >
-        <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
-
-
-
+    <div className="flex">
       {/* Sidebar */}
-      <div className={`fixed left-0 top-0 h-screen w-64 bg-white shadow-lg border-r border-gray-200 flex flex-col z-50 transform transition-transform duration-300 ${
-        isOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}>
+      <div className={`${isOpen ? 'w-64' : 'w-0'} h-screen bg-white shadow-lg border-r border-gray-200 flex flex-col flex-shrink-0 transition-all duration-300 overflow-hidden fixed left-0 top-0 z-30`}>
         <div className="p-6 border-b border-gray-200">
           <div className="flex justify-center">
             <img 
               src="/assets/splitr.png"
               alt="SPLITR Logo"
-              className="h-10 object-contain"
+              className="h-12 object-contain"
             />
           </div>
         </div>
 
         <nav className="mt-6 flex-1">
           {menuItems.map((item) => (
-            <button
-              key={item.name}
-              onClick={() => {
-                router.push(item.path);
-                setIsOpen(false);
-              }}
-              className={`w-full flex items-center px-6 py-3 text-left hover:bg-gray-50 transition-colors ${
+            <div key={item.name}>
+              <div className={`w-full flex items-center justify-between hover:bg-gray-50 transition-colors ${
                 pathname === item.path 
                   ? 'bg-orange-50 text-gray-600 border-r-2 border-orange-500' 
                   : 'text-gray-700'
-              }`}
-            >
-              {item.icon}
-              <span className="ml-3 font-medium">{item.name}</span>
-            </button>
+              }`}>
+                <button
+                  onClick={() => {
+                    router.push(item.path);
+                    setIsOpen(false);
+                  }}
+                  className="flex-1 flex items-center px-6 py-3 text-left"
+                >
+                  {item.icon}
+                  <span className="ml-3 font-medium">{item.name}</span>
+                </button>
+                {item.hasSubMenu && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsDashboardOpen(!isDashboardOpen);
+                    }}
+                    className="px-3 py-3 hover:bg-gray-100 rounded-r"
+                  >
+                    <svg 
+                      className={`w-4 h-4 transition-transform ${isDashboardOpen ? 'rotate-90' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              
+              {item.hasSubMenu && isDashboardOpen && (
+                <div className="bg-gray-50">
+                  {item.subMenuItems.map((subItem) => (
+                    <button
+                      key={subItem.name}
+                      onClick={() => {
+                        router.push(subItem.path);
+                        setIsOpen(false);
+                      }}
+                      className="w-full flex items-center px-12 py-2 text-left hover:bg-gray-100 transition-colors text-gray-600 text-xs"
+                    >
+                      <span>{subItem.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
 
-        <div className="p-6 border-t border-orange-200">
+        <div className="p-6 border-t border-gray-200">
           <button
-            onClick={() => {
-              localStorage.removeItem('token');
-              localStorage.removeItem('user');
-              router.push('/');
-            }}
-            className="w-full flex items-center px-4 py-2 text-grey-600 hover:bg-orange-700 rounded-md transition-colors border border-orange-500"
+            onClick={() => setShowLogoutModal(true)}
+            className="w-full flex items-center px-4 py-2 text-white rounded-md transition-colors border border-orange-500" style={{backgroundColor: '#E58025'}}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -92,6 +141,54 @@ export default function Sidebar() {
           </button>
         </div>
       </div>
-    </>
+      
+      {/* Content Area with Hamburger Button */}
+      <div className="flex-1 relative">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="fixed top-7 z-50 p-2 bg-white border border-gray-300 rounded-md shadow-md hover:bg-gray-50 transition-all duration-300"
+          style={{left: isOpen ? '280px' : '24px'}}
+        >
+          <svg className="w-6 h-6" fill="none" stroke="#E58025" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{backgroundColor: 'rgba(0, 0, 0, 0.5)'}}>
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Logout</h3>
+              <p className="text-gray-600 mb-6">Are you sure you want to log out?</p>
+              <div className="flex space-x-3 w-full">
+                <button
+                  onClick={() => setShowLogoutModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowLogoutModal(false);
+                    handleLogout();
+                  }}
+                  className="flex-1 px-4 py-2 text-white rounded-md transition-colors"
+                  style={{backgroundColor: '#FF8500'}}
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
