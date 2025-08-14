@@ -318,8 +318,8 @@ export default function Transactions() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
                     >
                       <option value="">All Methods</option>
-                      <option value="Instant">Instant</option>
-                      <option value="Schedule">Schedule</option>
+                      <option value="instant">Instant</option>
+                      <option value="scheduled">Schedule</option>
                     </select>
                   </div>
                 </div>

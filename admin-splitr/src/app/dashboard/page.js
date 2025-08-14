@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import AuthGuard from "../components/AuthGuard";
+import Cookies from 'js-cookie';
 import {
   getTransactions,
   getCategories,
@@ -258,7 +259,24 @@ const mapDailyAmount = (json) => {
 };
 
 export default function Dashboard() {
-  const [user] = useState({ name: "John Doe", role: "User" });
+  const [user, setUser] = useState({ name: "Admin", role: "Admin" });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Get user data from cookies
+  useEffect(() => {
+    const userData = Cookies.get('user');
+    if (userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        setUser({
+          name: parsedUser.name || parsedUser.username || "Admin",
+          role: parsedUser.role || "Admin"
+        });
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+  }, []);
 
   // ---------- FILTER STATES ----------
   const [trendRange, setTrendRange] = useState("7d"); // 7d | 30d | this_month | full_year
@@ -357,13 +375,42 @@ export default function Dashboard() {
     })();
   }, [amountRange]);
 
-  // ---------- Summary (sementara tetap statis) ----------
-  const summary = {
-    txToday: 1247,
-    amountSplitToday: 45_200_000_000,
-    successRate: 0.942,
-    failedRate: 0.058,
-  };
+  // ---------- Summary state ----------
+  const [summary, setSummary] = useState({
+    txToday: 0,
+    amountSplitToday: 0,
+    successRate: 0,
+    failedRate: 0,
+  });
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
+  // ---------- EFFECT: Summary ----------
+  useEffect(() => {
+    (async () => {
+      try {
+        setSummaryLoading(true);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/api/admin/dashboard/summary`, {
+          headers: {
+            'Authorization': `Bearer ${Cookies.get('sessionId')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        if (response.ok) {
+          setSummary({
+            txToday: data.txToday || data.transactionsToday || 0,
+            amountSplitToday: data.amountSplitToday || data.totalAmount || 0,
+            successRate: data.successRate || 0,
+            failedRate: data.failedRate || 0,
+          });
+        }
+      } catch (error) {
+        console.error('Summary API error:', error);
+      } finally {
+        setSummaryLoading(false);
+      }
+    })();
+  }, []);
 
   // ---------- Line chart layout (depends on trendData) ----------
   const lineChart = useMemo(() => {
@@ -393,33 +440,30 @@ export default function Dashboard() {
 
   return (
     <AuthGuard>
-      <div className="h-screen bg-white">
-        <Sidebar />
-
-        <div className="flex flex-col h-full">
+      <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
           {/* Header */}
-          <header className="bg-white border-b">
+          <header className="bg-white border-b sticky top-0 z-10">
             <div className="px-6">
-              <div className="flex justify-between items-center h-16">
-                <div className="flex items-center gap-3 ml-16">
-                  <div>
-                    <div className="text-2xl font-semibold text-slate-900">
-                      Dashboard Monitoring
-                    </div>
-                    <div className="text-sm text-slate-500 -mt-0.5">
-                      Overview of transaction performance and statistics
-                    </div>
-                  </div>
+              <div className="flex justify-between items-center h-24">
+                <div className="flex flex-col ml-16">
+                  <span className="text-xl font-semibold text-gray-900">
+                    Dashboard Monitoring
+                  </span>
+                  <span className="text-sm text-gray-500 mt-1">
+                    Overview of transaction performance and statistics
+                  </span>
                 </div>
                 <div className="pr-2 text-sm text-gray-600">
-                  Welcome, {user.name}
+                  Welcome, <span className="font-semibold text-orange-600">{user.name}</span>
                 </div>
               </div>
             </div>
           </header>
 
           {/* Content */}
-          <main className="flex-1 overflow-auto px-6 py-6">
+          <main className="flex-1 px-6 py-8">
             {/* Summary cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="bg-white p-5 rounded-2xl shadow-sm border-2 border-sky-400">
@@ -441,7 +485,7 @@ export default function Dashboard() {
                       Transaction Today
                     </div>
                     <div className="text-2xl font-semibold text-slate-900">
-                      {formatID(summary.txToday)}
+                      {summaryLoading ? '...' : formatID(summary.txToday)}
                     </div>
                   </div>
                 </div>
@@ -457,7 +501,7 @@ export default function Dashboard() {
                       Amount Split Today
                     </div>
                     <div className="text-2xl font-semibold text-slate-900">
-                      {formatIDRShort(summary.amountSplitToday)}
+                      {summaryLoading ? '...' : formatIDRShort(summary.amountSplitToday)}
                     </div>
                   </div>
                 </div>
@@ -479,7 +523,7 @@ export default function Dashboard() {
                   <div>
                     <div className="text-sm text-slate-500">Success Rate</div>
                     <div className="text-2xl font-semibold text-emerald-600">
-                      {formatPercent(summary.successRate)}
+                      {summaryLoading ? '...' : formatPercent(summary.successRate)}
                     </div>
                   </div>
                 </div>
@@ -501,7 +545,7 @@ export default function Dashboard() {
                   <div>
                     <div className="text-sm text-slate-500">Failed Rate</div>
                     <div className="text-2xl font-semibold text-rose-600">
-                      {formatPercent(summary.failedRate)}
+                      {summaryLoading ? '...' : formatPercent(summary.failedRate)}
                     </div>
                   </div>
                 </div>
