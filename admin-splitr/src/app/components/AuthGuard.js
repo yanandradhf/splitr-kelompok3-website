@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
 
 export default function AuthGuard({ children }) {
   const router = useRouter();
@@ -9,15 +8,12 @@ export default function AuthGuard({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const sessionId = Cookies.get('sessionId');
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
     
-    console.log('AuthGuard - Checking admin session:', sessionId);
-    
-    if (sessionId) {
+    if (token && user) {
       setIsAuthenticated(true);
-      console.log('AuthGuard - Admin authentication successful');
     } else {
-      console.log('AuthGuard - No admin session found, redirecting to login');
       router.push('/');
     }
     setIsLoading(false);
