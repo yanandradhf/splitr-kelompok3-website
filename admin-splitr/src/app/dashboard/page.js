@@ -442,20 +442,20 @@ export default function Dashboard() {
     <AuthGuard>
       <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
+        <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarOpen ? 'md:ml-64' : 'ml-0'}`}>
           {/* Header */}
           <header className="bg-white border-b sticky top-0 z-10">
             <div className="px-6">
               <div className="flex justify-between items-center h-24">
-                <div className="flex flex-col ml-16">
-                  <span className="text-xl font-semibold text-gray-900">
+                <div className="flex flex-col ml-4 md:ml-16">
+                  <span className="text-lg md:text-xl font-semibold text-gray-900">
                     Dashboard Monitoring
                   </span>
-                  <span className="text-sm text-gray-500 mt-1">
+                  <span className="text-xs md:text-sm text-gray-500 mt-1">
                     Overview of transaction performance and statistics
                   </span>
                 </div>
-                <div className="pr-2 text-sm text-gray-600">
+                <div className="pr-2 text-xs md:text-sm text-gray-600">
                   Welcome, <span className="font-semibold text-orange-600">{user.name}</span>
                 </div>
               </div>
@@ -463,9 +463,9 @@ export default function Dashboard() {
           </header>
 
           {/* Content */}
-          <main className="flex-1 px-6 py-8">
+          <main className="flex-1 px-4 md:px-6 py-6 md:py-8">
             {/* Summary cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
               <div className="bg-white p-5 rounded-2xl shadow-sm border-2 border-sky-400">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
@@ -553,7 +553,7 @@ export default function Dashboard() {
             </div>
 
             {/* Charts grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mb-6 md:mb-8">
               {/* Transaction Trends */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100">
                 <div className="px-6 pt-6 flex items-center justify-between">
@@ -763,7 +763,7 @@ export default function Dashboard() {
             </div>
 
             {/* Bottom charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
               {/* Payment Methods (Pie) */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100">
                 <div className="px-6 pt-6 flex items-center justify-between">

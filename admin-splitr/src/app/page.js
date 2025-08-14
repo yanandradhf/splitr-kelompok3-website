@@ -108,7 +108,7 @@ export default function SplitrLogin() {
   };
 
   const handleSSOLogin = () => {
-    window.location.href = '/api/auth/sso/bni';
+    router.push('/sso/bni');
   };
 
   const handleAdminLogin = () => {
@@ -120,29 +120,22 @@ export default function SplitrLogin() {
   };
 
   return (
-    <div className="w-screen h-screen bg-gray-800 flex m-0 p-0">
-      {/* Main Container */}
-      {/* <div className="bg-gray-200 w-full h-full flex items-center justify-center p-8"> */}
-        
-        {/* Login Box with Purple Border */}
-        <div className=" w-screen h-screen bg-gray-800 flex m-0 p-0 ">
-          
-          
+    <div className="w-screen h-screen bg-gray-800 flex flex-col md:flex-row m-0 p-0">
          {/* Left Side - Illustration */}
-          <div className="flex-1 bg-gray-100 p-8 flex items-center justify-center relative">
-            <div className="relative scale-90 w-full h-full flex items-center justify-center">
+          <div className="hidden md:flex flex-1 bg-gray-100 p-4 md:p-8 items-center justify-center relative">
+            <div className="relative scale-75 md:scale-90 w-full h-full flex items-center justify-center">
               {/* Gambar lokal */}
               <img 
                 src="/assets/phone.png"
                 alt="Phone Illustration"
-                className="rounded-3xl w-120 h-140 justify-center object-contain"
+                className="rounded-3xl max-w-full max-h-full object-contain"
               />
             </div>
           </div>
 
           {/* Right Side - Login Form */}
-          <div className="flex-1 p-2 flex flex-col justify-center bg-white">
-            <div className="max-w-md mx-auto w-full">
+          <div className="flex-1 p-4 md:p-2 flex flex-col justify-center bg-white min-h-screen md:min-h-0">
+            <div className="max-w-md mx-auto w-full px-4 md:px-0">
               {/* Logo */}
               <div className="flex justify-center mb-6">
                 <img 
@@ -244,6 +237,5 @@ export default function SplitrLogin() {
             </div>
           </div>
         </div>
-      </div>
   );
 }
