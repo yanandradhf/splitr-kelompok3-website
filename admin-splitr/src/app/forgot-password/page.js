@@ -21,26 +21,24 @@ export default function ForgotPassword() {
   };
 
   const handleSSOLogin = () => {
-    window.location.href = '/api/auth/sso/bni';
+    router.push('/sso/bni');
   };
 
   return (
-    <div className="w-screen h-screen bg-gray-800 flex m-0 p-0">
-      <div className="w-screen h-screen bg-gray-800 flex m-0 p-0">
-        
-        {/* Left Side - Illustration */}
-        <div className="flex-1 bg-gray-100 p-8 flex items-center justify-center relative">
-          <div className="relative scale-90 w-full h-full flex items-center justify-center">
+    <div className="w-screen h-screen bg-gray-800 flex flex-col md:flex-row m-0 p-0">
+      {/* Left Side - Illustration */}
+        <div className="hidden md:flex flex-1 bg-gray-100 p-4 md:p-8 items-center justify-center relative">
+          <div className="relative scale-75 md:scale-90 w-full h-full flex items-center justify-center">
             <img 
               src="/assets/phone.png"
               alt="Phone Illustration"
-              className="rounded-3xl w-120 h-140 justify-center object-contain"
+              className="rounded-3xl max-w-full max-h-full object-contain"
             />
           </div>
         </div>
 
-        {/* Right Side - Forgot Password Form */}
-        <div className="flex-1 p-8 flex flex-col justify-center bg-white">
+      {/* Right Side - Forgot Password Form */}
+      <div className="flex-1 p-4 md:p-8 flex flex-col justify-center bg-white min-h-screen md:min-h-0">
           <div className="max-w-md mx-auto w-full">
             {/* Logo */}
             <div className="text-center mb-8">
@@ -106,7 +104,6 @@ export default function ForgotPassword() {
             </div>
           </div>
         </div>
-      </div>
     </div>
   );
 }
