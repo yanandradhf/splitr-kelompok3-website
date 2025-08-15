@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import AuthGuard from "../components/AuthGuard";
-import Cookies from 'js-cookie';
+import Cookies from "js-cookie";
 import {
   getTransactions,
   getCategories,
@@ -264,16 +264,16 @@ export default function Dashboard() {
 
   // Get user data from cookies
   useEffect(() => {
-    const userData = Cookies.get('user');
+    const userData = Cookies.get("user");
     if (userData) {
       try {
         const parsedUser = JSON.parse(userData);
         setUser({
           name: parsedUser.name || parsedUser.username || "Admin",
-          role: parsedUser.role || "Admin"
+          role: parsedUser.role || "Admin",
         });
       } catch (error) {
-        console.error('Error parsing user data:', error);
+        console.error("Error parsing user data:", error);
       }
     }
   }, []);
@@ -389,12 +389,15 @@ export default function Dashboard() {
     (async () => {
       try {
         setSummaryLoading(true);
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/api/admin/dashboard/summary`, {
-          headers: {
-            'Authorization': `Bearer ${Cookies.get('sessionId')}`,
-            'Content-Type': 'application/json'
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE}/api/admin/dashboard/summary`,
+          {
+            headers: {
+              Authorization: `Bearer ${Cookies.get("sessionId")}`,
+              "Content-Type": "application/json",
+            },
           }
-        });
+        );
         const data = await response.json();
         if (response.ok) {
           setSummary({
@@ -405,7 +408,7 @@ export default function Dashboard() {
           });
         }
       } catch (error) {
-        console.error('Summary API error:', error);
+        console.error("Summary API error:", error);
       } finally {
         setSummaryLoading(false);
       }
@@ -442,7 +445,11 @@ export default function Dashboard() {
     <AuthGuard>
       <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarOpen ? 'md:ml-64' : 'ml-0'}`}>
+        <div
+          className={`flex flex-col min-h-screen transition-all duration-300 ${
+            sidebarOpen ? "md:ml-64" : "ml-0"
+          }`}
+        >
           {/* Header */}
           <header className="bg-white border-b sticky top-0 z-10">
             <div className="px-6">
@@ -456,7 +463,10 @@ export default function Dashboard() {
                   </span>
                 </div>
                 <div className="pr-2 text-xs md:text-sm text-gray-600">
-                  Welcome, <span className="font-semibold text-orange-600">{user.name}</span>
+                  Welcome,{" "}
+                  <span className="font-semibold text-orange-600">
+                    {user.name}
+                  </span>
                 </div>
               </div>
             </div>
@@ -485,7 +495,7 @@ export default function Dashboard() {
                       Transaction Today
                     </div>
                     <div className="text-2xl font-semibold text-slate-900">
-                      {summaryLoading ? '...' : formatID(summary.txToday)}
+                      {summaryLoading ? "..." : formatID(summary.txToday)}
                     </div>
                   </div>
                 </div>
@@ -501,7 +511,9 @@ export default function Dashboard() {
                       Amount Split Today
                     </div>
                     <div className="text-2xl font-semibold text-slate-900">
-                      {summaryLoading ? '...' : formatIDRShort(summary.amountSplitToday)}
+                      {summaryLoading
+                        ? "..."
+                        : formatIDRShort(summary.amountSplitToday)}
                     </div>
                   </div>
                 </div>
@@ -523,7 +535,9 @@ export default function Dashboard() {
                   <div>
                     <div className="text-sm text-slate-500">Success Rate</div>
                     <div className="text-2xl font-semibold text-emerald-600">
-                      {summaryLoading ? '...' : formatPercent(summary.successRate)}
+                      {summaryLoading
+                        ? "..."
+                        : formatPercent(summary.successRate)}
                     </div>
                   </div>
                 </div>
@@ -545,7 +559,9 @@ export default function Dashboard() {
                   <div>
                     <div className="text-sm text-slate-500">Failed Rate</div>
                     <div className="text-2xl font-semibold text-rose-600">
-                      {summaryLoading ? '...' : formatPercent(summary.failedRate)}
+                      {summaryLoading
+                        ? "..."
+                        : formatPercent(summary.failedRate)}
                     </div>
                   </div>
                 </div>
@@ -864,7 +880,7 @@ export default function Dashboard() {
 
             {/* Footer */}
             <div className="mt-8 text-center text-xs text-slate-500">
-              Copyright 2025. All rights reserved.
+              SPLITR by BNI Copyright 2025. All rights reserved.
             </div>
           </main>
         </div>

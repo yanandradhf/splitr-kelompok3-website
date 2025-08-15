@@ -223,6 +223,34 @@ export default function Transactions() {
     }
   };
 
+  // Generate the visible page numbers for pagination
+  const pageNumbers = useMemo(() => {
+    const pages = [];
+    const { page, totalPages } = pagination;
+    const startPage = Math.max(1, page - 2);
+    const endPage = Math.min(totalPages, page + 2);
+
+    if (startPage > 1) {
+      pages.push(1);
+      if (startPage > 2) {
+        pages.push("...");
+      }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        pages.push("...");
+      }
+      pages.push(totalPages);
+    }
+
+    return pages;
+  }, [pagination.page, pagination.totalPages]);
+
   return (
     <AuthGuard>
       <Sidebar isOpen={isOpen} setIsOpen={setIsOpen} />
@@ -467,7 +495,9 @@ export default function Transactions() {
                         >
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             <div className="font-medium text-gray-900">
-                              {index + 1}
+                              {(pagination.page - 1) * pagination.limit +
+                                index +
+                                1}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -535,9 +565,30 @@ export default function Transactions() {
                       >
                         Previous
                       </button>
-                      <span className="px-3 py-1 text-sm bg-orange-500 text-white rounded-md">
-                        {pagination.page}
-                      </span>
+
+                      {pageNumbers.map((page, index) =>
+                        page === "..." ? (
+                          <span
+                            key={index}
+                            className="px-3 py-1 text-sm text-gray-500"
+                          >
+                            ...
+                          </span>
+                        ) : (
+                          <button
+                            key={page}
+                            onClick={() => fetchTransactions(page)}
+                            className={`px-3 py-1 text-sm rounded-md ${
+                              pagination.page === page
+                                ? "bg-orange-500 text-white"
+                                : "text-gray-700 border border-gray-300 hover:bg-gray-50"
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        )
+                      )}
+
                       <button
                         onClick={() => fetchTransactions(pagination.page + 1)}
                         disabled={pagination.page >= pagination.totalPages}
