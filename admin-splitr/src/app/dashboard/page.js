@@ -1,326 +1,888 @@
-'use client';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Sidebar from '../components/Sidebar';
-import AuthGuard from '../components/AuthGuard';
-import Cookies from 'js-cookie';
+"use client";
+
+import { useMemo, useState, useEffect } from "react";
+import Sidebar from "../components/Sidebar";
+import AuthGuard from "../components/AuthGuard";
+import Cookies from "js-cookie";
+import {
+  getTransactions,
+  getCategories,
+  getPaymentMethods,
+  getDailyAmount,
+  periodMap,
+} from "../../lib/api";
+
+// ---------- Small UI pieces ----------
+function FilterSelect({ value, onChange, options }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
+      aria-label="Filter"
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// --- Y-axis nice ticks helper (untuk bar chart Amount) ---
+function makeNiceScale(maxVal, tickCount = 5) {
+  if (!isFinite(maxVal) || maxVal <= 0) {
+    return { max: 1, ticks: [0, 0.25, 0.5, 0.75, 1], step: 0.25 };
+  }
+  const raw = maxVal / tickCount;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const niceNorm =
+    norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10;
+  const step = niceNorm * mag;
+  const niceMax = Math.ceil(maxVal / step) * step;
+  const ticks = [];
+  for (let v = 0; v <= niceMax + 1e-9; v += step) ticks.push(v);
+  return { max: niceMax, ticks, step };
+}
+
+// --- Reusable SVG bar chart with Y-axis + grid ---
+function AmountBarChart({
+  data,
+  valueKey = "amount",
+  labelKey = "label",
+  unitLabel = "Amount (Million Rp)",
+  height = 260,
+}) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="h-64 grid place-items-center text-sm text-slate-500">
+        no data for selected range
+      </div>
+    );
+  }
+
+  const pad = { l: 64, r: 16, t: 16, b: 34 };
+  const minBarW = 18;
+  const barGap = 8;
+
+  const maxVal = Math.max(...data.map((d) => Number(d[valueKey] || 0)));
+  const { max: niceMax, ticks } = makeNiceScale(maxVal, 5);
+
+  // dynamic width: scrolls horizontally jika data banyak
+  const contentW = data.length * minBarW + (data.length - 1) * barGap;
+  const width = Math.max(520, pad.l + pad.r + contentW);
+  const innerW = width - pad.l - pad.r;
+  const innerH = height - pad.t - pad.b;
+
+  const scaleY = (v) => pad.t + innerH - (v / (niceMax || 1)) * innerH;
+  const barW = Math.max(minBarW, innerW / data.length - barGap);
+
+  return (
+    <div className="overflow-x-auto pr-1">
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full h-64"
+        aria-label="Amount bar chart"
+      >
+        {/* Y grid + ticks */}
+        {ticks.map((t, i) => {
+          const y = scaleY(t);
+          return (
+            <g key={i}>
+              <line
+                x1={pad.l}
+                y1={y}
+                x2={width - pad.r}
+                y2={y}
+                stroke="#e5e7eb"
+                strokeWidth="1"
+              />
+              <line
+                x1={pad.l - 4}
+                y1={y}
+                x2={pad.l}
+                y2={y}
+                stroke="#94a3b8"
+                strokeWidth="1"
+              />
+              <text
+                x={pad.l - 8}
+                y={y + 3}
+                textAnchor="end"
+                fontSize="11"
+                fill="#64748b"
+              >
+                {t}
+              </text>
+            </g>
+          );
+        })}
+        {/* Y axis line */}
+        <line
+          x1={pad.l}
+          y1={pad.t}
+          x2={pad.l}
+          y2={pad.t + innerH}
+          stroke="#cbd5e1"
+          strokeWidth="1"
+        />
+
+        {/* Y axis title */}
+        <text
+          x={14}
+          y={pad.t + innerH / 2}
+          fontSize="11"
+          fill="#64748b"
+          transform={`rotate(-90 14 ${pad.t + innerH / 2})`}
+        >
+          {unitLabel}
+        </text>
+
+        {/* Bars */}
+        {data.map((d, i) => {
+          const x = pad.l + i * (barW + barGap);
+          const val = Number(d[valueKey] || 0);
+          const y = scaleY(val);
+          const h = (val / (niceMax || 1)) * innerH;
+          return (
+            <g key={i}>
+              <rect
+                x={x}
+                y={y}
+                width={barW}
+                height={h}
+                rx="4"
+                className="fill-teal-400"
+              >
+                <title>{`${d[labelKey]}: Rp ${val} Juta`}</title>
+              </rect>
+              <text
+                x={x + barW / 2}
+                y={height - 10}
+                textAnchor="middle"
+                fontSize="10"
+                fill="#64748b"
+              >
+                {d[labelKey]}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ---------- Helpers ----------
+const formatID = (n) => new Intl.NumberFormat("id-ID").format(n);
+const formatPercent = (n) => `${(n * 100).toFixed(1)} %`;
+const formatIDRShort = (n) => {
+  if (n >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)} M`;
+  if (n >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(1)} Jt`;
+  return `Rp ${formatID(n)}`;
+};
+const toConic = (segments) => {
+  let acc = 0;
+  const total = segments.reduce((s, x) => s + (x.value || 0), 0) || 1;
+  return `conic-gradient(${segments
+    .map((s) => {
+      const p = (s.value / total) * 100; // pastikan 0–100
+      const start = acc;
+      acc += p;
+      return `${s.color} ${start}% ${acc}%`;
+    })
+    .join(",")})`;
+};
+
+// Palet warna untuk kategori
+const CAT_COLORS = [
+  "#2dd4bf",
+  "#fb923c",
+  "#9aa3af",
+  "#8b5cf6",
+  "#22c55e",
+  "#f59e0b",
+  "#3b82f6",
+  "#ef4444",
+];
+const paymentColor = (name) => {
+  if (/instant/i.test(name)) return "#fb923c";
+  if (/scheduled/i.test(name)) return "#2dd4bf";
+  return "#8b5cf6";
+};
+
+// ---------- Mappers respons API -> shape chart ----------
+const mapTransactions = (json) => {
+  const arr = json?.data ?? [];
+  return arr.map((it) => ({
+    label: it.label,
+    value: Number(it.transactions ?? 0),
+  }));
+};
+
+const mapCategories = (json) => {
+  const arr = json?.data ?? [];
+  console.log("Raw categories data:", arr);
+
+  return arr.map((it, i) => ({
+    name: it.category === "Other" ? "Others" : it.category,
+    value: Number(it.percentage || 0),
+    color: CAT_COLORS[i % CAT_COLORS.length],
+  }));
+};
+
+const mapPaymentMethods = (json) => {
+  const arr = json?.data ?? json ?? [];
+  const raw = arr.map((it) => ({
+    name: it.name ?? it.method ?? "Unknown",
+    rawValue: Number(it.value ?? it.count ?? it.total ?? 0),
+  }));
+  const total =
+    raw.reduce((s, x) => s + (isFinite(x.rawValue) ? x.rawValue : 0), 0) || 1;
+  return raw.map((x) => ({
+    name: x.name,
+    value: Number(((x.rawValue * 100) / total).toFixed(1)),
+    color: paymentColor(x.name),
+  }));
+};
+
+const mapDailyAmount = (json) => {
+  const arr = json?.data ?? json ?? [];
+  return arr.map((it, i) => ({
+    label: it.label ?? it.day ?? it.date ?? it.month ?? String(i + 1),
+    amount: Number(it.amount ?? it.value ?? it.total ?? 0),
+  }));
+};
 
 export default function Dashboard() {
-  const router = useRouter();
-  const [user, setUser] = useState({ name: 'Loading...', role: 'User' });
-  const [isOpen, setIsOpen] = useState(false);
-  
-  // Load user data from localStorage
+  const [user, setUser] = useState({ name: "Admin", role: "Admin" });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Get user data from cookies
   useEffect(() => {
-    const userData = localStorage.getItem('user');
+    const userData = Cookies.get("user");
     if (userData) {
-      const parsedUser = JSON.parse(userData);
-      setUser({ 
-        name: parsedUser.name || parsedUser.username || 'Admin', 
-        role: parsedUser.role || 'Admin' 
-      });
+      try {
+        const parsedUser = JSON.parse(userData);
+        setUser({
+          name: parsedUser.name || parsedUser.username || "Admin",
+          role: parsedUser.role || "Admin",
+        });
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+      }
     }
   }, []);
-  
-  // Chart data - can be replaced with API data
-  const [expenseCategories] = useState([
-    { name: 'Food & Dining', percentage: 40, color: '#f97316', bgColor: 'bg-orange-500' },
-    { name: 'Transport', percentage: 25, color: '#3b82f6', bgColor: 'bg-blue-500' },
-    { name: 'Entertainment', percentage: 20, color: '#10b981', bgColor: 'bg-green-500' },
-    { name: 'Others', percentage: 15, color: '#8b5cf6', bgColor: 'bg-purple-500' }
-  ]);
-  
-  const [monthlyData] = useState([
-    { month: 'Jan', amount: 1200000 },
-    { month: 'Feb', amount: 1800000 },
-    { month: 'Mar', amount: 1500000 },
-    { month: 'Apr', amount: 2000000 },
-    { month: 'May', amount: 1600000 },
-    { month: 'Jun', amount: 2200000 }
-  ]);
-  
-  // Calculate chart values
-  const maxAmount = Math.max(...monthlyData.map(d => d.amount));
-  const calculateStrokeDasharray = (percentage) => (percentage / 100) * 251.2;
-  const calculateStrokeDashoffset = (percentage, startPercentage = 0) => {
-    return 251.2 - (startPercentage / 100) * 251.2;
-  };
 
-  const handleLogout = async () => {
-    try {
-      const sessionId = localStorage.getItem('sessionId');
-      if (sessionId) {
-        await fetch('/api/auth/logout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId })
-        });
+  // ---------- FILTER STATES ----------
+  const [trendRange, setTrendRange] = useState("7d"); // 7d | 30d | this_month | full_year
+  const [catRange, setCatRange] = useState("7d"); // 7d | this_month | full_year
+  const [payRange, setPayRange] = useState("7d"); // 7d | full_year
+  const [amountRange, setAmountRange] = useState("7d"); // 7d | this_month | full_year
+
+  // ---------- DATA STATES + loading/error ----------
+  const [trendData, setTrendData] = useState([]);
+  const [trendLoading, setTrendLoading] = useState(false);
+  const [trendError, setTrendError] = useState("");
+
+  const [categoriesData, setCategoriesData] = useState([]);
+  const [catLoading, setCatLoading] = useState(false);
+  const [catError, setCatError] = useState("");
+
+  const [paymentData, setPaymentData] = useState([]);
+  const [payLoading, setPayLoading] = useState(false);
+  const [payError, setPayError] = useState("");
+
+  const [amountData, setAmountData] = useState([]);
+  const [amountLoading, setAmountLoading] = useState(false);
+  const [amountError, setAmountError] = useState("");
+
+  // ---------- EFFECT: Transactions (line) ----------
+  useEffect(() => {
+    (async () => {
+      try {
+        setTrendLoading(true);
+        setTrendError("");
+        console.log("Fetching trends for period:", periodMap[trendRange]);
+        const json = await getTransactions(periodMap[trendRange]);
+        console.log("Trends API response:", json);
+        const mapped = mapTransactions(json);
+        console.log("Mapped trends data:", mapped);
+        setTrendData(mapped);
+      } catch (e) {
+        console.error("Trends API error:", e);
+        setTrendError(e.response?.data?.message || e.message || "fetch error");
+      } finally {
+        setTrendLoading(false);
       }
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('sessionId');
-      router.push('/');
-    }
-  };
+    })();
+  }, [trendRange]);
+
+  // ---------- EFFECT: Categories (pie) ----------
+  useEffect(() => {
+    (async () => {
+      try {
+        setCatLoading(true);
+        setCatError("");
+        console.log("Fetching categories for period:", periodMap[catRange]);
+        const json = await getCategories(periodMap[catRange]);
+        console.log("Categories API response:", json);
+        const mapped = mapCategories(json);
+        console.log("Mapped categories data:", mapped);
+        setCategoriesData(mapped);
+      } catch (e) {
+        console.error("Categories API error:", e);
+        setCatError(e.response?.data?.message || e.message || "fetch error");
+      } finally {
+        setCatLoading(false);
+      }
+    })();
+  }, [catRange]);
+
+  // ---------- EFFECT: Payment Methods (pie) ----------
+  useEffect(() => {
+    (async () => {
+      try {
+        setPayLoading(true);
+        setPayError("");
+        const json = await getPaymentMethods(periodMap[payRange]);
+        setPaymentData(mapPaymentMethods(json));
+      } catch (e) {
+        setPayError(e.response?.data?.message || e.message || "fetch error");
+      } finally {
+        setPayLoading(false);
+      }
+    })();
+  }, [payRange]);
+
+  // ---------- EFFECT: Daily/Monthly Amount Split (bar) ----------
+  useEffect(() => {
+    (async () => {
+      try {
+        setAmountLoading(true);
+        setAmountError("");
+        const json = await getDailyAmount(periodMap[amountRange]);
+        setAmountData(mapDailyAmount(json));
+      } catch (e) {
+        setAmountError(e.response?.data?.message || e.message || "fetch error");
+      } finally {
+        setAmountLoading(false);
+      }
+    })();
+  }, [amountRange]);
+
+  // ---------- Summary state ----------
+  const [summary, setSummary] = useState({
+    txToday: 0,
+    amountSplitToday: 0,
+    successRate: 0,
+    failedRate: 0,
+  });
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
+  // ---------- EFFECT: Summary ----------
+  useEffect(() => {
+    (async () => {
+      try {
+        setSummaryLoading(true);
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE}/api/admin/dashboard/summary`,
+          {
+            headers: {
+              Authorization: `Bearer ${Cookies.get("sessionId")}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        const data = await response.json();
+        if (response.ok) {
+          setSummary({
+            txToday: data.txToday || data.transactionsToday || 0,
+            amountSplitToday: data.amountSplitToday || data.totalAmount || 0,
+            successRate: data.successRate || 0,
+            failedRate: data.failedRate || 0,
+          });
+        }
+      } catch (error) {
+        console.error("Summary API error:", error);
+      } finally {
+        setSummaryLoading(false);
+      }
+    })();
+  }, []);
+
+  // ---------- Line chart layout (depends on trendData) ----------
+  const lineChart = useMemo(() => {
+    const width = 520;
+    const height = 200;
+    const pad = { l: 40, r: 10, t: 10, b: 30 };
+    const innerW = width - pad.l - pad.r;
+    const innerH = height - pad.t - pad.b;
+
+    const minY = trendData.length
+      ? Math.min(...trendData.map((d) => d.value))
+      : 0;
+    const maxY = trendData.length
+      ? Math.max(...trendData.map((d) => d.value))
+      : 1;
+    const xStep =
+      trendData.length > 1 ? innerW / (trendData.length - 1) : innerW;
+
+    const scaleY = (v) =>
+      pad.t + innerH - ((v - minY) / (maxY - minY || 1)) * innerH;
+    const points = trendData
+      .map((d, i) => `${pad.l + i * xStep},${scaleY(d.value)}`)
+      .join(" ");
+
+    return { width, height, pad, innerH, xStep, scaleY, points };
+  }, [trendData]);
 
   return (
     <AuthGuard>
-      <Sidebar isOpen={isOpen} setIsOpen={setIsOpen} />
+      <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        
-        {/* Main Content */}
-        <div className="flex flex-col min-h-screen transition-all duration-300" style={{marginLeft: isOpen ? '256px' : '0px'}}>
+        <div
+          className={`flex flex-col min-h-screen transition-all duration-300 ${
+            sidebarOpen ? "md:ml-64" : "ml-0"
+          }`}
+        >
           {/* Header */}
-        <header className="bg-white border-b sticky top-0 z-10">
-          <div className="px-6">
-            <div className="flex justify-between items-center h-24">
-              <div className="flex flex-col ml-16">
-                <span className="text-xl font-semibold text-gray-900">Dashboard Monitoring</span>
-                <span className="text-sm text-gray-500 mt-1">Overview of transaction performance and statistics.</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <img 
-                  src="/assets/profile.jpg" 
-                  alt="Profile" 
-                  className="w-8 h-8 rounded-full object-cover border-2 border-gray-200"
-                  onError={(e) => {
-                    e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiNGM0Y0RjYiLz4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI4IiB5PSI4Ij4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggOEE0IDQgMCAxIDAgOCAwYTQgNCAwIDAgMCAwIDhaTTggMTBjLTQuNDIgMC04IDMuNTgtOCA4aDEuNWMwLTMuNTggMi45Mi02LjUgNi41LTYuNXM2LjUgMi45MiA2LjUgNi41SDE2Yy0wLTQuNDItMy41OC04LTgtOFoiIGZpbGw9IiM5Q0E0QUYiLz4KPC9zdmc+Cjwvc3ZnPgo8L3N2Zz4K';
-                  }}
-                />
-                <span className="text-sm font-medium text-gray-900">{user.name}</span>
+          <header className="bg-white border-b sticky top-0 z-10">
+            <div className="px-6">
+              <div className="flex justify-between items-center h-24">
+                <div className="flex flex-col ml-4 md:ml-16">
+                  <span className="text-lg md:text-xl font-semibold text-gray-900">
+                    Dashboard Monitoring
+                  </span>
+                  <span className="text-xs md:text-sm text-gray-500 mt-1">
+                    Overview of transaction performance and statistics
+                  </span>
+                </div>
+                <div className="pr-2 text-xs md:text-sm text-gray-600">
+                  Welcome,{" "}
+                  <span className="font-semibold text-orange-600">
+                    {user.name}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        {/* Dashboard Content */}
-        <main className="flex-1 px-6 py-8">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-            <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">Total Balance</h3>
-                <p className="text-2xl font-bold text-gray-900">Rp 2,450,000</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-            <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">Completed</h3>
-                <p className="text-2xl font-bold text-gray-900">1,234</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-            <div className="flex items-center">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">Pending</h3>
-                <p className="text-2xl font-bold text-gray-900">56</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-            <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">Active Groups</h3>
-                <p className="text-2xl font-bold text-gray-900">12</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Expense Categories Chart */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">Expense Categories</h3>
-            </div>
-            <div className="p-6">
-              <div className="flex items-center justify-center">
-                <div className="relative w-48 h-48">
-                  <svg className="w-48 h-48 transform -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8"/>
-                    {expenseCategories.map((category, index) => {
-                      const startPercentage = expenseCategories.slice(0, index).reduce((sum, cat) => sum + cat.percentage, 0);
-                      return (
-                        <circle 
-                          key={category.name}
-                          cx="50" 
-                          cy="50" 
-                          r="40" 
-                          fill="none" 
-                          stroke={category.color} 
-                          strokeWidth="8"
-                          strokeDasharray={calculateStrokeDasharray(category.percentage)}
-                          strokeDashoffset={calculateStrokeDashoffset(category.percentage, startPercentage)}
-                          className="transition-all duration-1000"
-                        />
-                      );
-                    })}
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gray-900">100%</div>
-                      <div className="text-sm text-gray-500">Total</div>
+          {/* Content */}
+          <main className="flex-1 px-4 md:px-6 py-6 md:py-8">
+            {/* Summary cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
+              <div className="bg-white p-5 rounded-2xl shadow-sm border-2 border-sky-400">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
+                    <svg
+                      className="w-6 h-6 text-orange-500"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
+                      <path d="M7 3h10a1 1 0 0 1 1 1v15l-2-1-2 1-2-1-2 1-2-1-2 1V4a1 1 0 0 1 1-1z" />
+                      <path d="M9 7h6M9 11h6M9 15h3" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-sm text-slate-500">
+                      Transaction Today
+                    </div>
+                    <div className="text-2xl font-semibold text-slate-900">
+                      {summaryLoading ? "..." : formatID(summary.txToday)}
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="mt-6 space-y-3">
-                {expenseCategories.map((category) => (
-                  <div key={category.name} className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <div className={`w-3 h-3 ${category.bgColor} rounded-full mr-3`}></div>
-                      <span className="text-sm font-medium">{category.name}</span>
-                    </div>
-                    <span className="text-sm font-semibold">{category.percentage}%</span>
+
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center">
+                    <span className="text-teal-500 font-bold">Rp</span>
                   </div>
-                ))}
+                  <div>
+                    <div className="text-sm text-slate-500">
+                      Amount Split Today
+                    </div>
+                    <div className="text-2xl font-semibold text-slate-900">
+                      {summaryLoading
+                        ? "..."
+                        : formatIDRShort(summary.amountSplitToday)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                    <svg
+                      className="w-6 h-6 text-emerald-600"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-sm text-slate-500">Success Rate</div>
+                    <div className="text-2xl font-semibold text-emerald-600">
+                      {summaryLoading
+                        ? "..."
+                        : formatPercent(summary.successRate)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
+                    <svg
+                      className="w-6 h-6 text-rose-600"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-sm text-slate-500">Failed Rate</div>
+                    <div className="text-2xl font-semibold text-rose-600">
+                      {summaryLoading
+                        ? "..."
+                        : formatPercent(summary.failedRate)}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Monthly Spending Trend */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">Monthly Spending Trend</h3>
-            </div>
-            <div className="p-6">
-              <div className="h-64 flex items-end justify-between space-x-2">
-                {monthlyData.map((data, index) => {
-                  const heightPercentage = (data.amount / maxAmount) * 100;
-                  return (
-                    <div key={index} className="flex-1 flex flex-col items-center">
-                      <div 
-                        className="w-full bg-gradient-to-t from-orange-500 to-orange-300 rounded-t-md transition-all duration-1000 hover:from-orange-600 hover:to-orange-400" 
-                        style={{ height: `${heightPercentage}%`, minHeight: '20px' }}
+            {/* Charts grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mb-6 md:mb-8">
+              {/* Transaction Trends */}
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100">
+                <div className="px-6 pt-6 flex items-center justify-between">
+                  <h3 className="text-[17px] font-semibold text-slate-900">
+                    Transaction Trends
+                  </h3>
+                  <FilterSelect
+                    value={trendRange}
+                    onChange={setTrendRange}
+                    options={[
+                      { value: "7d", label: "7 Days" },
+                      { value: "30d", label: "30 Days" },
+                      { value: "this_month", label: "This Month" },
+                      { value: "full_year", label: "Full Year" },
+                    ]}
+                  />
+                </div>
+                <div className="px-6 pb-6 pt-2">
+                  {trendError ? (
+                    <div className="h-64 grid place-items-center text-sm text-rose-600">
+                      failed to load
+                    </div>
+                  ) : trendLoading ? (
+                    <div className="h-64 grid place-items-center text-sm text-slate-500">
+                      loading...
+                    </div>
+                  ) : (
+                    <svg
+                      viewBox={`0 0 520 200`}
+                      className="w-full h-64"
+                      aria-label="Transaction trends line chart"
+                    >
+                      {/* Y grid */}
+                      {[0, 1, 2, 3, 4].map((i) => {
+                        const y = 10 + (i / 4) * (200 - 10 - 30);
+                        return (
+                          <line
+                            key={i}
+                            x1={40}
+                            y1={y}
+                            x2={520 - 10}
+                            y2={y}
+                            stroke="#e5e7eb"
+                            strokeWidth="1"
+                          />
+                        );
+                      })}
+                      {/* X labels */}
+                      {trendData.map((d, i) => (
+                        <text
+                          key={`${d.label}-${i}`}
+                          x={
+                            40 +
+                            i *
+                              (trendData.length > 1
+                                ? (520 - 40 - 10) / (trendData.length - 1)
+                                : 0)
+                          }
+                          y={200 - 8}
+                          textAnchor="middle"
+                          fontSize="11"
+                          fill="#64748b"
+                        >
+                          {d.label}
+                        </text>
+                      ))}
+                      {/* Y title */}
+                      <text
+                        x="14"
+                        y={100}
+                        fontSize="11"
+                        fill="#64748b"
+                        transform="rotate(-90 14 100)"
                       >
+                        Transactions
+                      </text>
+                      {/* Polyline */}
+                      {trendData.length > 0 && (
+                        <>
+                          <polyline
+                            fill="none"
+                            stroke="#8b5cf6"
+                            strokeWidth="2.5"
+                            points={(() => {
+                              const width = 520,
+                                pad = { l: 40, r: 10, t: 10, b: 30 };
+                              const innerW = width - pad.l - pad.r,
+                                innerH = 200 - pad.t - pad.b;
+                              const minY = Math.min(
+                                ...trendData.map((d) => d.value)
+                              );
+                              const maxY = Math.max(
+                                ...trendData.map((d) => d.value)
+                              );
+                              const xStep =
+                                trendData.length > 1
+                                  ? innerW / (trendData.length - 1)
+                                  : innerW;
+                              const scaleY = (v) =>
+                                pad.t +
+                                innerH -
+                                ((v - minY) / (maxY - minY || 1)) * innerH;
+                              return trendData
+                                .map(
+                                  (d, i) =>
+                                    `${pad.l + i * xStep},${scaleY(d.value)}`
+                                )
+                                .join(" ");
+                            })()}
+                          />
+                          {trendData.map((d, i) => {
+                            const width = 520,
+                              pad = { l: 40, r: 10, t: 10, b: 30 };
+                            const innerW = width - pad.l - pad.r,
+                              innerH = 200 - pad.t - pad.b;
+                            const minY = Math.min(
+                              ...trendData.map((x) => x.value)
+                            );
+                            const maxY = Math.max(
+                              ...trendData.map((x) => x.value)
+                            );
+                            const xStep =
+                              trendData.length > 1
+                                ? innerW / (trendData.length - 1)
+                                : innerW;
+                            const scaleY = (v) =>
+                              pad.t +
+                              innerH -
+                              ((v - minY) / (maxY - minY || 1)) * innerH;
+                            return (
+                              <circle
+                                key={i}
+                                cx={40 + i * xStep}
+                                cy={scaleY(d.value)}
+                                r="3.5"
+                                fill="#8b5cf6"
+                              />
+                            );
+                          })}
+                        </>
+                      )}
+                    </svg>
+                  )}
+                </div>
+              </div>
+
+              {/* Transaction Categories (Pie + % di legend) */}
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100">
+                <div className="px-6 pt-6 flex items-center justify-between">
+                  <h3 className="text-[17px] font-semibold text-slate-900">
+                    Transaction Categories
+                  </h3>
+                  <FilterSelect
+                    value={catRange}
+                    onChange={setCatRange}
+                    options={[
+                      { value: "7d", label: "7 Days" },
+                      { value: "this_month", label: "This Month" },
+                      { value: "full_year", label: "Full Year" },
+                    ]}
+                  />
+                </div>
+
+                <div className="px-6 pb-6 pt-2">
+                  {catError ? (
+                    <div className="h-56 grid place-items-center text-sm text-rose-600">
+                      failed to load
+                    </div>
+                  ) : catLoading ? (
+                    <div className="h-56 grid place-items-center text-sm text-slate-500">
+                      loading...
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-center">
+                        <div
+                          aria-label="Transaction categories pie chart"
+                          className="relative w-56 h-56 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.04)]"
+                          style={{ background: toConic(categoriesData) }}
+                        />
                       </div>
-                      <div className="mt-2 text-xs font-medium text-gray-600">{data.month}</div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-4 flex justify-between text-xs text-gray-500">
-                <span>Rp 0</span>
-                <span>Rp {(maxAmount / 1000000).toFixed(1)}M</span>
+                      <div className="mt-6 grid grid-cols-2 gap-x-10 gap-y-3">
+                        {categoriesData.map((c) => (
+                          <div
+                            key={c.name}
+                            className="flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="inline-block w-3 h-3 rounded-sm"
+                                style={{ backgroundColor: c.color }}
+                              />
+                              <span className="text-sm text-slate-700">
+                                {c.name}
+                              </span>
+                            </div>
+                            <span className="text-sm font-medium text-slate-900">
+                              {c.value}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Recent Activity and Quick Actions */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Recent Transactions */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">Recent Transactions</h3>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {[
-                  { name: 'Dinner Split', amount: '-Rp 125,000', status: 'completed', color: 'green' },
-                  { name: 'Movie Tickets', amount: '-Rp 80,000', status: 'pending', color: 'yellow' },
-                  { name: 'Grocery Shopping', amount: '-Rp 200,000', status: 'completed', color: 'green' },
-                  { name: 'Gas Bill', amount: '-Rp 150,000', status: 'pending', color: 'yellow' },
-                ].map((transaction, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center">
-                      <div className={`w-3 h-3 rounded-full bg-${transaction.color}-400 mr-3`}></div>
-                      <span className="font-medium text-gray-900">{transaction.name}</span>
+            {/* Bottom charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+              {/* Payment Methods (Pie) */}
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100">
+                <div className="px-6 pt-6 flex items-center justify-between">
+                  <h3 className="text-[17px] font-semibold text-slate-900">
+                    Payment Methods
+                  </h3>
+                  <FilterSelect
+                    value={payRange}
+                    onChange={setPayRange}
+                    options={[
+                      { value: "7d", label: "7 Days" },
+                      { value: "full_year", label: "Full Year" },
+                    ]}
+                  />
+                </div>
+                <div className="px-6 pb-6 pt-2">
+                  {payError ? (
+                    <div className="h-56 grid place-items-center text-sm text-rose-600">
+                      failed to load
                     </div>
-                    <span className="font-semibold text-gray-900">{transaction.amount}</span>
-                  </div>
-                ))}
+                  ) : payLoading ? (
+                    <div className="h-56 grid place-items-center text-sm text-slate-500">
+                      loading...
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-center">
+                        <div
+                          aria-label="Payment methods pie chart"
+                          className="relative w-56 h-56 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.04)]"
+                          style={{ background: toConic(paymentData) }}
+                        />
+                      </div>
+                      <div className="mt-6 space-y-2 max-w-sm mx-auto">
+                        {paymentData.map((m) => (
+                          <div
+                            key={m.name}
+                            className="flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="inline-block w-3 h-3 rounded-sm"
+                                style={{ backgroundColor: m.color }}
+                              />
+                              <span className="text-sm text-slate-700">
+                                {m.name}
+                              </span>
+                            </div>
+                            <span className="text-sm font-medium text-slate-900">
+                              {m.value}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* Quick Actions */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-2 gap-4">
-                <button className="p-4 bg-orange-50 rounded-lg border border-orange-200 hover:bg-orange-100 transition-colors">
-                  <div className="text-center">
-                    <div className="w-8 h-8 bg-orange-500 rounded-lg mx-auto mb-2 flex items-center justify-center">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
+              {/* Daily / Monthly Amount Split (Bar) */}
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100">
+                <div className="px-6 pt-6 flex items-center justify-between">
+                  <h3 className="text-[17px] font-semibold text-slate-900">
+                    {amountRange === "full_year"
+                      ? "Monthly Amount Split"
+                      : "Daily Amount Split"}
+                  </h3>
+                  <FilterSelect
+                    value={amountRange}
+                    onChange={setAmountRange}
+                    options={[
+                      { value: "7d", label: "7 Days" },
+                      { value: "this_month", label: "This Month" },
+                      { value: "full_year", label: "Full Year" },
+                    ]}
+                  />
+                </div>
+                <div className="px-6 pb-6 pt-2">
+                  {amountError ? (
+                    <div className="h-64 grid place-items-center text-sm text-rose-600">
+                      failed to load
                     </div>
-                    <span className="text-sm font-medium text-gray-900">New Split</span>
-                  </div>
-                </button>
-                <button className="p-4 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors">
-                  <div className="text-center">
-                    <div className="w-8 h-8 bg-blue-500 rounded-lg mx-auto mb-2 flex items-center justify-center">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
+                  ) : amountLoading ? (
+                    <div className="h-64 grid place-items-center text-sm text-slate-500">
+                      loading...
                     </div>
-                    <span className="text-sm font-medium text-gray-900">Add Group</span>
-                  </div>
-                </button>
-                <button 
-                  onClick={() => router.push('/transactions')}
-                  className="p-4 bg-green-50 rounded-lg border border-green-200 hover:bg-green-100 transition-colors"
-                >
-                  <div className="text-center">
-                    <div className="w-8 h-8 bg-green-500 rounded-lg mx-auto mb-2 flex items-center justify-center">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">View All</span>
-                  </div>
-                </button>
-                <button className="p-4 bg-purple-50 rounded-lg border border-purple-200 hover:bg-purple-100 transition-colors">
-                  <div className="text-center">
-                    <div className="w-8 h-8 bg-purple-500 rounded-lg mx-auto mb-2 flex items-center justify-center">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">Settings</span>
-                  </div>
-                </button>
+                  ) : (
+                    <AmountBarChart
+                      data={amountData}
+                      valueKey="amount"
+                      labelKey="label"
+                      unitLabel="Amount (Million Rp)"
+                    />
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-        </main>
+
+            {/* Footer */}
+            <div className="mt-8 text-center text-xs text-slate-500">
+              SPLITR by BNI Copyright 2025. All rights reserved.
+            </div>
+          </main>
         </div>
       </div>
     </AuthGuard>

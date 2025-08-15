@@ -58,9 +58,9 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
   };
 
   return (
-    <div className="flex">
+    <>
       {/* Sidebar */}
-      <div className={`${isOpen ? 'w-64' : 'w-0'} h-screen bg-white shadow-lg border-r border-gray-200 flex flex-col flex-shrink-0 transition-all duration-300 overflow-hidden fixed left-0 top-0 z-30`}>
+      <div className={`${isOpen ? 'w-64' : 'w-0'} h-screen bg-white shadow-lg border-r border-gray-200 flex flex-col flex-shrink-0 transition-all duration-300 overflow-hidden fixed left-0 top-0 z-40 md:z-30`}>
         <div className="p-6 border-b border-gray-200">
           <div className="flex justify-center">
             <img 
@@ -142,23 +142,29 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
         </div>
       </div>
       
-      {/* Content Area with Hamburger Button */}
-      <div className="flex-1 relative">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="fixed top-7 z-50 p-2 bg-white border border-gray-300 rounded-md shadow-md hover:bg-gray-50 transition-all duration-300"
-          style={{left: isOpen ? '280px' : '24px'}}
-        >
-          <svg className="w-6 h-6" fill="none" stroke="#E58025" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-      </div>
+      {/* Hamburger Button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="fixed top-7 z-50 p-2 bg-white border border-gray-300 rounded-md shadow-md hover:bg-gray-50 transition-all duration-300"
+        style={{left: isOpen ? (window.innerWidth >= 768 ? '280px' : '24px') : '24px'}}
+      >
+        <svg className="w-6 h-6" fill="none" stroke="#E58025" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      {/* Mobile Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden" 
+          onClick={() => setIsOpen(false)}
+        />
+      )}
 
       {/* Logout Confirmation Modal */}
       {showLogoutModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50" style={{backgroundColor: 'rgba(0, 0, 0, 0.5)'}}>
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
+          <div className="bg-white rounded-lg p-4 md:p-6 max-w-sm w-full mx-4 shadow-xl">
             <div className="flex flex-col items-center text-center">
               <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mb-4">
                 <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -189,6 +195,6 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
