@@ -1,37 +1,39 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 
 export function middleware(request) {
   const pathname = request.nextUrl.pathname;
-  const sessionId = request.cookies.get('sessionId')?.value;
+  const sessionId = request.cookies.get("sessionId")?.value;
   const method = request.method;
-  
-  console.log('Middleware - Checking access to:', pathname, method);
-  console.log('Middleware - SessionId:', sessionId ? 'exists' : 'missing');
-  
-  // Allow API requests (login, logout, etc.)
-  if (pathname.startsWith('/api/')) {
+
+  console.log("Middleware - Checking access to:", pathname, method);
+  console.log("Middleware - SessionId:", sessionId ? "exists" : "missing");
+
+  // Allow API requests
+  if (pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
-  
-  // If user has session but tries to access login page (GET only), return 403
-  if (pathname === '/' && sessionId && method === 'GET') {
-    console.log('Middleware - Authenticated user accessing login page, returning 403');
-    return new Response(null, { status: 403 });
+
+  // If logged in and accessing "/", redirect to dashboard
+  if (pathname === "/" && sessionId && method === "GET") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
-  
-  // Protected paths that require authentication
-  const protectedPaths = ['/dashboard', '/profile', '/transactions'];
-  
-  if (protectedPaths.some(path => pathname.startsWith(path))) {
+
+  // If not logged in and accessing "/dashboard", redirect to "/"
+  if (pathname.startsWith("/dashboard") && !sessionId) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  // Protected paths
+  const protectedPaths = ["/profile", "/transactions"];
+  if (protectedPaths.some((path) => pathname.startsWith(path))) {
     if (!sessionId) {
-      console.log('Middleware - No session, returning 403 Forbidden');
-      return new Response(null, { status: 403 });
+      return NextResponse.redirect(new URL("/", request.url));
     }
   }
-  
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: '/((?!api|_next/static|_next/image|favicon.ico).*)'
+  matcher: "/((?!api|_next/static|_next/image|favicon.ico).*)",
 };
