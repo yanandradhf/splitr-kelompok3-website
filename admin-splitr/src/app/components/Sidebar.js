@@ -20,7 +20,7 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
       ),
       hasSubMenu: true,
       subMenuItems: [
-        { name: 'Transaction Trends', path: '/dashboard' },
+        { name: ' Trends', path: '/dashboard' },
         { name: 'Daily Amount Split', path: '/dashboard' },
         { name: 'Payment Methods', path: '/dashboard' },
         { name: 'User Retention', path: '/dashboard' }

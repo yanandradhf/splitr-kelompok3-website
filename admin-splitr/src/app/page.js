@@ -65,6 +65,12 @@ export default function SplitrLogin() {
 
       console.log('Response status:', response.status);
       
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned HTML instead of JSON. Check API endpoint.');
+      }
+      
       const data = await response.json();
       console.log('Response data:', data);
 
