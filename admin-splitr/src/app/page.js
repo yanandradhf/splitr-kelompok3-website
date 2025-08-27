@@ -99,8 +99,10 @@ export default function SplitrLogin() {
         console.log('SessionId cookie:', Cookies.get('sessionId'));
         console.log('User cookie:', Cookies.get('user'));
         
-        // Use router.push for proper Next.js navigation
-        router.push('/dashboard');
+        // Small delay to ensure cookies are set before navigation
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 100);
       } else {
         console.error('Login failed:', data);
         alert(data.error || data.message || 'Login failed');

@@ -4,24 +4,36 @@ export async function POST(request) {
   try {
     const { username, password } = await request.json();
     
-    console.log('Local login attempt:', { username });
+    console.log('Login attempt:', { username });
     
-    // TODO: Uncomment for API version
-    // const response = await fetch('https://533c27f18d6b.ngrok-free.app/api/admin/login', {
-    //   method: 'POST',
-    //   headers: { 
-    //     'Content-Type': 'application/json',
-    //     'ngrok-skip-browser-warning': 'true'
-    //   },
-    //   body: JSON.stringify({ username, password })
-    // });
-    // const data = await response.json();
-    // return new Response(JSON.stringify(data), {
-    //   status: response.status,
-    //   headers: { 'Content-Type': 'application/json' }
-    // });
+    // Try external API first
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/api/admin/login`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({ username, password }),
+        timeout: 5000
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('External API login successful');
+        
+        // Ensure sessionId exists
+        if (!data.sessionId) {
+          data.sessionId = 'session_' + Date.now();
+        }
+        
+        return NextResponse.json(data);
+      }
+    } catch (error) {
+      console.log('External API unavailable, using fallback authentication');
+    }
     
-    // Local authentication
+    // Fallback authentication
     const validCredentials = [
       { username: 'admin', password: 'admin123', role: 'Admin', name: 'Administrator' },
       { username: 'user', password: 'user123', role: 'User', name: 'User Demo' },

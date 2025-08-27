@@ -13,15 +13,19 @@ export default function Transactions() {
   const [user, setUser] = useState({ name: "Loading...", role: "User" });
   const [isOpen, setIsOpen] = useState(false);
 
-  // Load user data from localStorage
+  // Load user data from cookies
   useEffect(() => {
-    const userData = localStorage.getItem("user");
+    const userData = Cookies.get("user");
     if (userData) {
-      const parsedUser = JSON.parse(userData);
-      setUser({
-        name: parsedUser.name || parsedUser.username || "Admin",
-        role: parsedUser.role || "Admin",
-      });
+      try {
+        const parsedUser = JSON.parse(userData);
+        setUser({
+          name: parsedUser.name || parsedUser.username || "Admin",
+          role: parsedUser.role || "Admin",
+        });
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+      }
     }
   }, []);
 
@@ -46,7 +50,7 @@ export default function Transactions() {
   const fetchTransactions = async (page = 1) => {
     try {
       setLoading(true);
-      const sessionId = localStorage.getItem("sessionId");
+      const sessionId = Cookies.get("sessionId");
 
       const params = {
         sessionId,
@@ -112,7 +116,8 @@ export default function Transactions() {
 
   const exportCSV = async () => {
     try {
-      const sessionId = localStorage.getItem("sessionId");
+      // Try API export first
+      const sessionId = Cookies.get("sessionId");
       const params = { sessionId };
 
       if (dateFrom) params.date_from = dateFrom;
@@ -135,7 +140,56 @@ export default function Transactions() {
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
       console.error("CSV export error:", error);
-      alert("Failed to export CSV");
+      
+      // Fallback: Generate CSV manually from current data
+      try {
+        const dataToExport = filteredTransactions.length > 0 ? filteredTransactions : transactions;
+        
+        if (dataToExport.length === 0) {
+          alert("No data to export");
+          return;
+        }
+
+        // Create CSV content
+        const headers = [
+          "No",
+          "Transaction ID", 
+          "Date",
+          "Sender",
+          "Recipient", 
+          "Amount",
+          "Branch Code",
+          "Payment Method",
+          "Status"
+        ];
+        
+        const csvContent = [
+          headers.join(","),
+          ...dataToExport.map((transaction, index) => [
+            index + 1,
+            `"${transaction.transaction_id || "N/A"}"`,
+            `"${transaction.transaction_date || "N/A"}"`,
+            `"${transaction.sender?.name || "N/A"}"`,
+            `"${transaction.recipient?.name || "N/A"}"`,
+            `"Rp ${transaction.amount?.toLocaleString() || "0"}"`,
+            `"${transaction.recipient?.branch_code || "N/A"}"`,
+            `"${transaction.payment_method || "N/A"}"`,
+            `"${transaction.status || "N/A"}"`
+          ].join(","))
+        ].join("\n");
+
+        // Download CSV
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(downloadUrl);
+      } catch (fallbackError) {
+        console.error("Fallback CSV export error:", fallbackError);
+        alert("Failed to export CSV");
+      }
     }
   };
 
@@ -329,9 +383,9 @@ export default function Transactions() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
                     >
                       <option value="">All Status</option>
-                      <option value="Pending">Pending</option>
+                      <option value="pending">Pending</option>
                       <option value="completed">Success</option>
-                      <option value="Failed">Failed</option>
+                      <option value="failed">Failed</option>
                     </select>
                   </div>
 
