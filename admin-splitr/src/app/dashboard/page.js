@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import AuthGuard from "../components/AuthGuard";
 import Cookies from "js-cookie";
+import axios from "axios";
 import {
   getTransactions,
   getCategories,
@@ -389,41 +390,22 @@ export default function Dashboard() {
     (async () => {
       try {
         setSummaryLoading(true);
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE}/api/admin/dashboard/summary`,
-          {
-            headers: {
-              Authorization: `Bearer ${Cookies.get("sessionId")}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+        const response = await axios.get('/api/admin/dashboard/summary', {
+          headers: {
+            Authorization: `Bearer ${Cookies.get("sessionId")}`,
+            "Content-Type": "application/json",
+          },
+        });
         
-        // Check if response is JSON
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          throw new Error('API returned non-JSON response');
-        }
-        
-        const data = await response.json();
-        if (response.ok) {
-          setSummary({
-            txToday: data.txToday || data.transactionsToday || 0,
-            amountSplitToday: data.amountSplitToday || data.totalAmount || 0,
-            successRate: data.successRate || 0,
-            failedRate: data.failedRate || 0,
-          });
-        } else {
-          // Fallback data when API fails
-          setSummary({
-            txToday: 1247,
-            amountSplitToday: 45200000000,
-            successRate: 0.942,
-            failedRate: 0.058,
-          });
-        }
+        const data = response.data;
+        setSummary({
+          txToday: data.txToday || data.transactionsToday || 0,
+          amountSplitToday: data.amountSplitToday || data.totalAmount || 0,
+          successRate: data.successRate || 0,
+          failedRate: data.failedRate || 0,
+        });
       } catch (error) {
-        console.error("Summary API error:", error.message || error);
+        console.error("Summary API error:", error);
         // Fallback data when API fails
         setSummary({
           txToday: 1247,
