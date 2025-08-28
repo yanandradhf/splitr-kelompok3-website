@@ -5,9 +5,8 @@ export async function GET(request) {
     const sessionId = request.headers.get('authorization')?.replace('Bearer ', '');
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/api/admin/dashboard/charts/payment-methods?period=${period}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/api/admin/dashboard/charts/payment-methods?sessionId=${sessionId}&period=${period}`, {
         headers: {
-          'Authorization': `Bearer ${sessionId}`,
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true'
         },
@@ -22,13 +21,7 @@ export async function GET(request) {
       console.log('External API unavailable, using fallback data');
     }
 
-    // Fallback mock data
-    const mockData = [
-      { name: 'instant', value: 65 },
-      { name: 'scheduled', value: 35 }
-    ];
-
-    return Response.json({ data: mockData });
+    return Response.json({ data: [] });
   } catch (error) {
     console.log('Chart API unavailable, using fallback data');
     return Response.json({ data: [] }, { status: 500 });

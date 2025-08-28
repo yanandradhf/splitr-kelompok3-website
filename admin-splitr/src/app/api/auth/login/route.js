@@ -33,36 +33,12 @@ export async function POST(request) {
       console.log('External API unavailable, using fallback authentication');
     }
     
-    // Fallback authentication
-    const validCredentials = [
-      { username: 'admin', password: 'admin123', role: 'Admin', name: 'Administrator' },
-      { username: 'user', password: 'user123', role: 'User', name: 'User Demo' },
-      { username: 'demo', password: 'demo123', role: 'Demo', name: 'Demo User' }
-    ];
-    
-    const user = validCredentials.find(u => u.username === username && u.password === password);
-    
-    if (user) {
-      const response = {
-        success: true,
-        sessionId: 'session_' + Date.now(),
-        admin: {
-          id: 1,
-          username: user.username,
-          name: user.name,
-          role: user.role
-        }
-      };
-      
-      console.log('Login successful:', response);
-      return NextResponse.json(response);
-    } else {
-      console.log('Invalid credentials');
-      return NextResponse.json(
-        { error: 'Invalid username or password' },
-        { status: 401 }
-      );
-    }
+    // No fallback - pure API only
+    console.log('External API unavailable');
+    return NextResponse.json(
+      { error: 'Authentication service unavailable' },
+      { status: 503 }
+    );
     
   } catch (error) {
     console.error('Route error:', error);

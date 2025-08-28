@@ -280,10 +280,10 @@ export default function Dashboard() {
   }, []);
 
   // ---------- FILTER STATES ----------
-  const [trendRange, setTrendRange] = useState("7d"); // 7d | 30d | this_month | full_year
-  const [catRange, setCatRange] = useState("7d"); // 7d | this_month | full_year
-  const [payRange, setPayRange] = useState("7d"); // 7d | full_year
-  const [amountRange, setAmountRange] = useState("7d"); // 7d | this_month | full_year
+  const [trendRange, setTrendRange] = useState("7d"); // 7d | this_month | this_year
+  const [catRange, setCatRange] = useState("7d"); // 7d | this_month | this_year
+  const [payRange, setPayRange] = useState("7d"); // 7d | this_month | this_year
+  const [amountRange, setAmountRange] = useState("7d"); // 7d | this_month | this_year
 
   // ---------- DATA STATES + loading/error ----------
   const [trendData, setTrendData] = useState([]);
@@ -398,20 +398,22 @@ export default function Dashboard() {
         });
         
         const data = response.data;
+        console.log('Dashboard API response:', data);
+        
         setSummary({
-          txToday: data.txToday || data.transactionsToday || 0,
-          amountSplitToday: data.amountSplitToday || data.totalAmount || 0,
-          successRate: data.successRate || 0,
-          failedRate: data.failedRate || 0,
+          txToday: data.today?.transaction_count || 0,
+          amountSplitToday: data.today?.amount_split || 0,
+          successRate: (data.today?.success_rate || 0) / 100, // Convert percentage to decimal
+          failedRate: (data.today?.failed_rate || 0) / 100, // Convert percentage to decimal
         });
       } catch (error) {
         console.error("Summary API error:", error);
-        // Fallback data when API fails
+        // Set empty data when API fails
         setSummary({
-          txToday: 1247,
-          amountSplitToday: 45200000000,
-          successRate: 0.942,
-          failedRate: 0.058,
+          txToday: 0,
+          amountSplitToday: 0,
+          successRate: 0,
+          failedRate: 0,
         });
       } finally {
         setSummaryLoading(false);
@@ -585,9 +587,8 @@ export default function Dashboard() {
                     onChange={setTrendRange}
                     options={[
                       { value: "7d", label: "7 Days" },
-                      { value: "30d", label: "30 Days" },
                       { value: "this_month", label: "This Month" },
-                      { value: "full_year", label: "Full Year" },
+                      { value: "this_year", label: "This Year" },
                     ]}
                   />
                 </div>
@@ -732,7 +733,7 @@ export default function Dashboard() {
                     options={[
                       { value: "7d", label: "7 Days" },
                       { value: "this_month", label: "This Month" },
-                      { value: "full_year", label: "Full Year" },
+                      { value: "this_year", label: "This Year" },
                     ]}
                   />
                 </div>
@@ -795,7 +796,8 @@ export default function Dashboard() {
                     onChange={setPayRange}
                     options={[
                       { value: "7d", label: "7 Days" },
-                      { value: "full_year", label: "Full Year" },
+                      { value: "this_month", label: "This Month" },
+                      { value: "this_year", label: "This Year" },
                     ]}
                   />
                 </div>
@@ -847,7 +849,7 @@ export default function Dashboard() {
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100">
                 <div className="px-6 pt-6 flex items-center justify-between">
                   <h3 className="text-[17px] font-semibold text-slate-900">
-                    {amountRange === "full_year"
+                    {amountRange === "this_year"
                       ? "Monthly Amount Split"
                       : "Daily Amount Split"}
                   </h3>
@@ -857,7 +859,7 @@ export default function Dashboard() {
                     options={[
                       { value: "7d", label: "7 Days" },
                       { value: "this_month", label: "This Month" },
-                      { value: "full_year", label: "Full Year" },
+                      { value: "this_year", label: "This Year" },
                     ]}
                   />
                 </div>
