@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Image from 'next/image';
 import useAuthStore from '../../store/authStore';
 
 export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
@@ -77,9 +78,11 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
       <div className={`${isOpen ? 'w-64' : 'w-0'} h-screen bg-white shadow-lg border-r border-gray-200 flex flex-col flex-shrink-0 transition-all duration-300 overflow-hidden fixed left-0 top-0 z-40 md:z-30`}>
         <div className="p-6 border-b border-gray-200">
           <div className="flex justify-center">
-            <img 
+            <Image 
               src="/assets/splitr.png"
               alt="SPLITR Logo"
+              width={120}
+              height={48}
               className="h-12 object-contain"
             />
           </div>
