@@ -1,107 +1,43 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import Sidebar from "../components/Sidebar";
-import AuthGuard from "../components/AuthGuard";
+import { DashboardLayout, Button, Input, Select, SkeletonTable } from "../../components";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import axios from "axios";
-import Cookies from "js-cookie";
+import useTransactionsStore from "../../store/transactionsStore";
+import { getStatusColor } from "../../utils/helpers";
 
 export default function Transactions() {
   const router = useRouter();
-  const [user, setUser] = useState({ name: "Loading...", role: "User" });
-  const [isOpen, setIsOpen] = useState(false);
+  
+  // Zustand stores
+  const {
+    transactions, loading, pagination, filters,
+    setFilters, resetFilters, fetchTransactions, exportCSV
+  } = useTransactionsStore();
+  
+  const {
+    dateFrom, dateTo, statusFilter, paymentMethodFilter, 
+    searchQuery, sortField, sortDirection
+  } = filters;
 
-  // Load user data from cookies
+  // Initial fetch
   useEffect(() => {
-    const userData = Cookies.get("user");
-    if (userData) {
-      try {
-        const parsedUser = JSON.parse(userData);
-        setUser({
-          name: parsedUser.name || parsedUser.username || "Admin",
-          role: parsedUser.role || "Admin",
-        });
-      } catch (error) {
-        console.error("Error parsing user data:", error);
-      }
-    }
+    fetchTransactions();
   }, []);
 
-  // Filter states
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [paymentMethodFilter, setPaymentMethodFilter] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  
-  // Sorting states
-  const [sortField, setSortField] = useState("");
-  const [sortDirection, setSortDirection] = useState("asc");
-
-  // Dynamic transaction data from API
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    totalPages: 0,
-  });
-
-  // Fetch transactions from API
-  const fetchTransactions = async (page = 1) => {
-    try {
-      setLoading(true);
-      const sessionId = Cookies.get("sessionId");
-
-      const params = {
-        sessionId,
-        limit: "10",
-        page: page.toString(),
-      };
-
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
-      if (statusFilter) params.status = statusFilter;
-      if (paymentMethodFilter) params.payment_method = paymentMethodFilter;
-      if (searchQuery) params.search = searchQuery;
-      if (sortField) {
-        params.sort_by = sortField;
-        params.sort_direction = sortDirection;
-      }
-
-      const response = await axios.get("/api/transactions", { params });
-
-      const data = response.data;
-      setTransactions(data.data || []);
-      setPagination({
-        page: data.pagination?.page || 1,
-        limit: data.pagination?.limit || 10,
-        total: data.pagination?.total || 0,
-        totalPages: data.pagination?.total_pages || 0,
-      });
-    } catch (error) {
-      console.error("Error fetching transactions:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Load transactions on component mount and when filters change
+  // Fetch when filters change
   useEffect(() => {
     fetchTransactions();
   }, [dateFrom, dateTo, statusFilter, paymentMethodFilter]);
 
-  // Auto-apply filters when search query changes (with debounce)
+  // Debounced search
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (searchQuery !== "") {
         fetchTransactions(1);
       }
     }, 500);
-
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
@@ -188,30 +124,13 @@ export default function Transactions() {
     return filtered;
   }, [transactions, sortField, sortDirection, searchQuery]);
 
-  const resetFilters = () => {
-    setDateFrom("");
-    setDateTo("");
-    setStatusFilter("");
-    setPaymentMethodFilter("");
-    setSearchQuery("");
-    setSortField("");
-    setSortDirection("asc");
-    // Fetch data again with no filters
-    fetchTransactions(1);
-  };
-
   const applyFilters = () => {
-    fetchTransactions(1); // Reset to page 1 when applying filters
+    fetchTransactions(1);
   };
   
   const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDirection("asc");
-    }
-    // Don't fetch again, use client-side sorting
+    const newDirection = sortField === field && sortDirection === "asc" ? "desc" : "asc";
+    setFilters({ sortField: field, sortDirection: newDirection });
   };
   
   const getSortButton = (field, label) => {
@@ -235,82 +154,40 @@ export default function Transactions() {
     );
   };
 
-  const exportCSV = async () => {
+  const handleExportCSV = async () => {
     try {
-      // Try API export first
-      const sessionId = Cookies.get("sessionId");
-      const params = { sessionId };
-
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
-      if (statusFilter) params.status = statusFilter;
-      if (paymentMethodFilter) params.payment_method = paymentMethodFilter;
-      if (searchQuery) params.search = searchQuery;
-
-      const response = await axios.get("/api/transactions/export", {
-        params,
-        responseType: "blob",
-      });
-
-      const blob = new Blob([response.data], { type: "text/csv" });
+      await exportCSV();
+    } catch (error) {
+      // Fallback to manual CSV generation
+      const dataToExport = filteredTransactions.length > 0 ? filteredTransactions : transactions;
+      if (dataToExport.length === 0) {
+        alert("No data to export");
+        return;
+      }
+      
+      const headers = ["No", "Transaction ID", "Date", "Sender", "Recipient", "Amount", "Branch Code", "Payment Method", "Status"];
+      const csvContent = [
+        headers.join(","),
+        ...dataToExport.map((transaction, index) => [
+          index + 1,
+          `"${transaction.transaction_id || "N/A"}"`,
+          `"${transaction.transaction_date || "N/A"}"`,
+          `"${transaction.sender?.name || "N/A"}"`,
+          `"${transaction.recipient?.name || "N/A"}"`,
+          `"Rp ${transaction.amount?.toLocaleString() || "0"}"`,
+          `"${transaction.recipient?.branch_code || "N/A"}"`,
+          `"${transaction.payment_method || "N/A"}"`,
+          `"${transaction.status || "N/A"}"`
+        ].join(","))
+      ].join("\n");
+      
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = downloadUrl;
-      a.download = "transactions.csv";
+      a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`;
       a.click();
       window.URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
-      console.error("CSV export error:", error);
-      
-      // Fallback: Generate CSV manually from current data
-      try {
-        const dataToExport = filteredTransactions.length > 0 ? filteredTransactions : transactions;
-        
-        if (dataToExport.length === 0) {
-          alert("No data to export");
-          return;
-        }
-
-        // Create CSV content
-        const headers = [
-          "No",
-          "Transaction ID", 
-          "Date",
-          "Sender",
-          "Recipient", 
-          "Amount",
-          "Branch Code",
-          "Payment Method",
-          "Status"
-        ];
-        
-        const csvContent = [
-          headers.join(","),
-          ...dataToExport.map((transaction, index) => [
-            index + 1,
-            `"${transaction.transaction_id || "N/A"}"`,
-            `"${transaction.transaction_date || "N/A"}"`,
-            `"${transaction.sender?.name || "N/A"}"`,
-            `"${transaction.recipient?.name || "N/A"}"`,
-            `"Rp ${transaction.amount?.toLocaleString() || "0"}"`,
-            `"${transaction.recipient?.branch_code || "N/A"}"`,
-            `"${transaction.payment_method || "N/A"}"`,
-            `"${transaction.status || "N/A"}"`
-          ].join(","))
-        ].join("\n");
-
-        // Download CSV
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        window.URL.revokeObjectURL(downloadUrl);
-      } catch (fallbackError) {
-        console.error("Fallback CSV export error:", fallbackError);
-        alert("Failed to export CSV");
-      }
     }
   };
 
@@ -385,30 +262,7 @@ export default function Transactions() {
     }
   };
 
-  const getStatusColor = (status) => {
-    const statusLower = status?.toLowerCase() || "";
-    
-    if (statusLower.includes("completed")) {
-      if (statusLower.includes("late")) {
-        return "bg-orange-100 text-orange-800";
-      } else if (statusLower.includes("scheduled")) {
-        return "bg-blue-100 text-blue-800";
-      } else {
-        return "bg-green-100 text-green-800";
-      }
-    }
-    
-    switch (statusLower) {
-      case "success":
-        return "bg-green-100 text-green-800";
-      case "pending":
-        return "bg-yellow-100 text-yellow-800";
-      case "failed":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
+
 
   // Generate the visible page numbers for pagination
   const pageNumbers = useMemo(() => {
@@ -439,43 +293,10 @@ export default function Transactions() {
   }, [pagination.page, pagination.totalPages]);
 
   return (
-    <AuthGuard>
-      <Sidebar isOpen={isOpen} setIsOpen={setIsOpen} />
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <div
-          className="flex flex-col min-h-screen transition-all duration-300"
-          style={{ marginLeft: isOpen ? "256px" : "0px" }}
-        >
-          <header className="bg-white border-b sticky top-0 z-10">
-            <div className="px-6">
-              <div className="flex justify-between items-center h-24">
-                <div className="flex flex-col ml-16">
-                  <span className="text-xl font-semibold text-gray-900">
-                    Transaction Monitoring View
-                  </span>
-                  <span className="text-sm text-gray-500 mt-1">
-                    View and export past completed transactions.
-                  </span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <img
-                    src="/assets/profile.jpg"
-                    alt="Profile"
-                    className="w-8 h-8 rounded-full object-cover border-2 border-gray-200"
-                    onError={(e) => {
-                      e.target.src =
-                        "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiNGM0Y0RjYiLz4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI4IiB5PSI4Ij4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggOEE0IDQgMCAxIDAgOCAwYTQgNCAwIDAgMCAwIDhaTTggMTBjLTQuNDIgMC04IDMuNTgtOCA4aDEuNWMwLTMuNTggMi45Mi02LjUgNi41LTYuNXM2LjUgMi45MiA2LjUgNi41SDE2Yy0wLTQuNDItMy41OC04LTgtOFoiIGZpbGw9IiM5Q0E0QUYiLz4KPC9zdmc+Cjwvc3ZnPgo8L3N2Zz4K";
-                    }}
-                  />
-                  <span className="text-sm font-medium text-gray-900">
-                    {user.name}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          <main className="flex-1 px-6 py-8">
+    <DashboardLayout 
+      title="Transaction Monitoring View" 
+      subtitle="View and export past completed transactions"
+    >
             {/* Filters Section */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
               <div className="p-6">
@@ -489,7 +310,7 @@ export default function Transactions() {
                     <input
                       type="date"
                       value={dateFrom}
-                      onChange={(e) => setDateFrom(e.target.value)}
+                      onChange={(e) => setFilters({ dateFrom: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
                     />
                   </div>
@@ -500,7 +321,7 @@ export default function Transactions() {
                     <input
                       type="date"
                       value={dateTo}
-                      onChange={(e) => setDateTo(e.target.value)}
+                      onChange={(e) => setFilters({ dateTo: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
                     />
                   </div>
@@ -512,7 +333,7 @@ export default function Transactions() {
                     </label>
                     <select
                       value={paymentMethodFilter}
-                      onChange={(e) => setPaymentMethodFilter(e.target.value)}
+                      onChange={(e) => setFilters({ paymentMethodFilter: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
                     >
                       <option value="">All Methods</option>
@@ -528,7 +349,7 @@ export default function Transactions() {
                     </label>
                     <select
                       value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
+                      onChange={(e) => setFilters({ statusFilter: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
                     >
                       <option value="">All Status</option>
@@ -559,9 +380,11 @@ export default function Transactions() {
                   </div>
 
                   <div className="flex space-x-3">
-                    <button
-                      onClick={exportCSV}
-                      className="px-5 py-1 bg-white text-black border border-black rounded-md text-sm hover:bg-gray-100 transition-colors flex items-center"
+                    <Button
+                      variant="secondary"
+                      onClick={handleExportCSV}
+                      size="sm"
+                      className="flex items-center"
                     >
                       <svg
                         className="w-4 h-4 mr-2 text-green-500"
@@ -577,11 +400,13 @@ export default function Transactions() {
                         />
                       </svg>
                       Export CSV
-                    </button>
+                    </Button>
 
-                    <button
+                    <Button
+                      variant="secondary"
                       onClick={exportPDF}
-                      className="px-5 py-1 bg-white text-black border border-black rounded-md text-sm hover:bg-gray-100 transition-colors flex items-center"
+                      size="sm"
+                      className="flex items-center"
                     >
                       <svg
                         className="w-4 h-4 mr-2 text-red-500"
@@ -597,7 +422,7 @@ export default function Transactions() {
                         />
                       </svg>
                       Export PDF
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -611,7 +436,7 @@ export default function Transactions() {
                     type="text"
                     placeholder="Search by transaction ID, name, branch code, payment method, status, amount, or date"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => setFilters({ searchQuery: e.target.value })}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
                   />
                   <svg
@@ -632,12 +457,11 @@ export default function Transactions() {
             </div>
 
             {/* Transactions Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-              {loading ? (
-                <div className="flex justify-center items-center py-12">
-                  <div className="text-gray-500">Loading transactions...</div>
-                </div>
-              ) : filteredTransactions.length === 0 ? (
+            {loading ? (
+              <SkeletonTable rows={10} cols={9} />
+            ) : (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+                {filteredTransactions.length === 0 ? (
                 <div className="flex justify-center items-center py-12">
                   <div className="text-gray-500">No transactions found</div>
                 </div>
@@ -730,52 +554,49 @@ export default function Transactions() {
                       ({pagination.total} total transactions)
                     </div>
                     <div className="flex space-x-2">
-                      <button
+                      <Button
+                        variant="secondary"
                         onClick={() => fetchTransactions(pagination.page - 1)}
                         disabled={pagination.page <= 1}
-                        className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-orange-500"
+                        size="sm"
                       >
                         Previous
-                      </button>
+                      </Button>
 
                       {pageNumbers.map((page, index) =>
                         page === "..." ? (
                           <span
-                            key={index}
+                            key={`ellipsis-${index}`}
                             className="px-3 py-1 text-sm text-gray-500"
                           >
                             ...
                           </span>
                         ) : (
-                          <button
-                            key={page}
+                          <Button
+                            key={`page-${page}`}
                             onClick={() => fetchTransactions(page)}
-                            className={`px-3 py-1 text-sm rounded-md ${
-                              pagination.page === page
-                                ? "bg-orange-500 text-white"
-                                : "text-gray-700 border border-gray-300 hover:bg-gray-50"
-                            }`}
+                            variant={pagination.page === page ? "primary" : "secondary"}
+                            size="sm"
                           >
                             {page}
-                          </button>
+                          </Button>
                         )
                       )}
 
-                      <button
+                      <Button
+                        variant="secondary"
                         onClick={() => fetchTransactions(pagination.page + 1)}
                         disabled={pagination.page >= pagination.totalPages}
-                        className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-orange-500"
+                        size="sm"
                       >
                         Next
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
-              )}
-            </div>
-          </main>
-        </div>
-      </div>
-    </AuthGuard>
+                )}
+              </div>
+            )}
+    </DashboardLayout>
   );
 }

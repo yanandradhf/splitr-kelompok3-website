@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button, Input } from '../../components';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -58,48 +59,48 @@ export default function ForgotPassword() {
             {/* Form */}
             <div className="space-y-4">
               {/* Email Field */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors text-gray-900 bg-white placeholder-gray-400"
-                  placeholder="Enter your email address"
-                />
-              </div>
+              <Input
+                label="Email Address"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email address"
+                required
+              />
 
               {/* Email Verification Button */}
-              <button
+              <Button
                 onClick={handleEmailVerification}
                 disabled={isLoading}
-                className="w-full bg-orange-500 text-white py-2.5 rounded-md font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                loading={isLoading}
+                className="w-full"
               >
-                {isLoading ? 'SENDING...' : 'Verfication Email'}
-              </button>
+                Verification Email
+              </Button>
 
               {/* Divider */}
               <div className="text-center text-gray-500 text-sm">OR</div>
 
               {/* BNI SSO Button */}
-              <button
+              <Button
+                variant="secondary"
                 onClick={handleSSOLogin}
-                className="w-full bg-white border border-blue-500 text-blue-600 py-2.5 rounded-md font-medium hover:bg-blue-50 transition-colors flex items-center justify-center"
+                className="w-full border-blue-500 text-blue-600 hover:bg-blue-50 flex items-center justify-center"
               >
                 <span className="mr-2">🏢</span>
                 Reset with BNI SSO
-              </button>
+              </Button>
 
               {/* Back to Login */}
               <div className="text-center mt-6">
-                <button 
+                <Button 
+                  variant="secondary"
                   onClick={() => router.push('/')}
-                  className="text-sm text-orange-500 hover:text-orange-600 font-medium"
+                  size="sm"
+                  className="text-orange-500 hover:text-orange-600"
                 >
                   ← Back to Login
-                </button>
+                </Button>
               </div>
             </div>
           </div>

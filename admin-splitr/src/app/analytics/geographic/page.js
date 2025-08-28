@@ -1,9 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
-import Sidebar from "../../components/Sidebar";
-import AuthGuard from "../../components/AuthGuard";
-import Cookies from "js-cookie";
-import axios from "axios";
+import { DashboardLayout, Select, SkeletonChart, SkeletonList, SkeletonTable } from "../../../components";
+import useAnalyticsStore from "../../../store/analyticsStore";
+import { formatCurrency } from "../../../utils/formatters";
 import dynamic from "next/dynamic";
 
 const MapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false });
@@ -12,52 +11,15 @@ const CircleMarker = dynamic(() => import('react-leaflet').then(mod => mod.Circl
 const Popup = dynamic(() => import('react-leaflet').then(mod => mod.Popup), { ssr: false });
 
 export default function GeographicAnalytics() {
-  const [user, setUser] = useState({ name: "Loading...", role: "User" });
-  const [isOpen, setIsOpen] = useState(false);
-  const [period, setPeriod] = useState("7days");
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState({ heatmapData: [] });
   const [mapLoaded, setMapLoaded] = useState(false);
+  
+  // Zustand stores
+  const { geographicData: data, loading, period, setPeriod, fetchGeographicData } = useAnalyticsStore();
 
-  // Load user data from cookies
-  useEffect(() => {
-    const userData = Cookies.get("user");
-    if (userData) {
-      try {
-        const parsedUser = JSON.parse(userData);
-        setUser({
-          name: parsedUser.name || parsedUser.username || "Admin",
-          role: parsedUser.role || "Admin",
-        });
-      } catch (error) {
-        console.error("Error parsing user data:", error);
-      }
-    }
-  }, []);
-
-  // Fetch geographic data
-  const fetchGeographicData = async () => {
-    try {
-      setLoading(true);
-      const sessionId = Cookies.get("sessionId");
-      
-      const response = await axios.get("/api/analytics/geographic", {
-        params: { sessionId, period }
-      });
-
-      console.log('Geographic API response:', response.data);
-      setData(response.data || { heatmapData: [] });
-    } catch (error) {
-      console.error("Error fetching geographic data:", error);
-      setData({ heatmapData: [] });
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Initial fetch
   useEffect(() => {
     fetchGeographicData();
-  }, [period]);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -69,13 +31,7 @@ export default function GeographicAnalytics() {
     }
   }, []);
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
+
 
   const getIntensityColor = (intensity) => {
     if (intensity >= 40) return "bg-red-500";
@@ -94,44 +50,10 @@ export default function GeographicAnalytics() {
 
 
   return (
-    <AuthGuard>
-      <Sidebar isOpen={isOpen} setIsOpen={setIsOpen} />
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <div
-          className="flex flex-col min-h-screen transition-all duration-300"
-          style={{ marginLeft: isOpen ? "256px" : "0px" }}
-        >
-          {/* Header */}
-          <header className="bg-white border-b sticky top-0 z-10">
-            <div className="px-6">
-              <div className="flex justify-between items-center h-24">
-                <div className="flex flex-col ml-16">
-                  <span className="text-xl font-semibold text-gray-900">
-                    Geographic Analytics
-                  </span>
-                  <span className="text-sm text-gray-500 mt-1">
-                    Branch-to-branch transfer flows and regional insights
-                  </span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <img
-                    src="/assets/profile.jpg"
-                    alt="Profile"
-                    className="w-8 h-8 rounded-full object-cover border-2 border-gray-200"
-                    onError={(e) => {
-                      e.target.src =
-                        "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiNGM0Y0RjYiLz4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI4IiB5PSI4Ij4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggOEE0IDQgMCAxIDAgOCAwYTQgNCAwIDAgMCAwIDhaTTggMTBjLTQuNDIgMC04IDMuNTgtOCA4aDEuNWMwLTMuNTggMi45Mi02LjUgNi41LTYuNXM2LjUgMi45MiA2LjUgNi41SDE2Yy0wLTQuNDItMy41OC04LTgtOFoiIGZpbGw9IiM5Q0E0QUYiLz4KPC9zdmc+Cjwvc3ZnPgo8L3N2Zz4K";
-                    }}
-                  />
-                  <span className="text-sm font-medium text-gray-900">
-                    {user.name}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          <main className="flex-1 px-6 py-8">
+    <DashboardLayout 
+      title="Geographic Analytics" 
+      subtitle="Transaction distribution and branch activity across Indonesia"
+    >
             {/* Filter Section */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
               <div className="p-6">
@@ -139,23 +61,32 @@ export default function GeographicAnalytics() {
                   <h3 className="text-lg font-semibold text-gray-900">
                     Time Period
                   </h3>
-                  <select
+                  <Select
                     value={period}
                     onChange={(e) => setPeriod(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
-                  >
-                    <option value="7days">Last 7 Days</option>
-                    <option value="30days">Last 30 Days</option>
-                    <option value="thismonth">This Month</option>
-                    <option value="year">This Year</option>
-                  </select>
+                    options={[
+                      { value: "7days", label: "Last 7 Days" },
+                      { value: "30days", label: "Last 30 Days" },
+                      { value: "thismonth", label: "This Month" },
+                      { value: "year", label: "This Year" }
+                    ]}
+                  />
                 </div>
               </div>
             </div>
 
             {loading ? (
-              <div className="flex justify-center items-center py-12">
-                <div className="text-gray-500">Loading geographic data...</div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <SkeletonChart height="384px" />
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                  <div className="mb-4">
+                    <div className="h-6 bg-gray-200 rounded w-48 mb-4"></div>
+                  </div>
+                  <SkeletonList items={6} />
+                </div>
+                <div className="lg:col-span-2">
+                  <SkeletonTable rows={8} cols={5} />
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -183,7 +114,7 @@ export default function GeographicAnalytics() {
                             
                             return (
                               <CircleMarker
-                                key={index}
+                                key={`marker-${branch.branchCode}-${index}`}
                                 center={[branch.latitude, branch.longitude]}
                                 radius={radius}
                                 pathOptions={{ color, fillColor: color, fillOpacity: 0.6, weight: 2 }}
@@ -245,7 +176,7 @@ export default function GeographicAnalytics() {
                         ) : (
                           data.heatmapData.map((branch, index) => (
                             <div
-                              key={index}
+                              key={`branch-list-${branch.branchCode}-${index}`}
                               className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                             >
                               <div className="flex items-center space-x-3">
@@ -303,7 +234,7 @@ export default function GeographicAnalytics() {
                             </tr>
                           ) : (
                             data.heatmapData.map((branch, index) => (
-                              <tr key={index} className="hover:bg-gray-50">
+                              <tr key={`branch-table-${branch.branchCode}-${index}`} className="hover:bg-gray-50">
                                 <td className="px-4 py-3">
                                   <div>
                                     <div className="font-medium text-gray-900">
@@ -346,9 +277,6 @@ export default function GeographicAnalytics() {
                 </div>
               </div>
             )}
-          </main>
-        </div>
-      </div>
-    </AuthGuard>
+    </DashboardLayout>
   );
 }

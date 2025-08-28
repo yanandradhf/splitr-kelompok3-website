@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import Cookies from 'js-cookie';
+import useAuthStore from '../../store/authStore';
 
 export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
   const router = useRouter();
@@ -47,9 +47,15 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
     }
   ];
 
+  const { logout } = useAuthStore();
+  
   const handleLogout = async () => {
     try {
-      const sessionId = Cookies.get('sessionId');
+      const sessionId = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('sessionId='))
+        ?.split('=')[1];
+      
       if (sessionId) {
         await fetch('/api/auth/logout', {
           method: 'POST',
@@ -60,9 +66,7 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      Cookies.remove('sessionId');
-      Cookies.remove('user');
-      Cookies.remove('token');
+      logout();
       router.push('/');
     }
   };

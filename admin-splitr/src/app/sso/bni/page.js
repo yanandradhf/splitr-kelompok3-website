@@ -1,5 +1,6 @@
 'use client';
 import { useRouter } from 'next/navigation';
+import { Button } from '../../../components';
 
 export default function BNISSOPage() {
   const router = useRouter();
@@ -48,12 +49,12 @@ export default function BNISSOPage() {
           </p>
 
           {/* Back to login button */}
-          <button
+          <Button
             onClick={handleBackToLogin}
-            className="w-full bg-orange-500 text-white py-2.5 rounded-md font-medium hover:bg-orange-600 transition-colors"
+            className="w-full"
           >
             Back to Login
-          </button>
+          </Button>
         </div>
       </div>
     </div>
