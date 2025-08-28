@@ -20,7 +20,7 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
       ),
       hasSubMenu: true,
       subMenuItems: [
-        { name: 'Transaction Trends', path: '/dashboard' },
+        { name: ' Trends', path: '/dashboard' },
         { name: 'Daily Amount Split', path: '/dashboard' },
         { name: 'Payment Methods', path: '/dashboard' },
         { name: 'User Retention', path: '/dashboard' }
@@ -32,6 +32,16 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      )
+    },
+    {
+      name: 'Geographic Analytics',
+      path: '/analytics/geographic',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
       )
     }
@@ -132,7 +142,9 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
         <div className="p-6 border-t border-gray-200">
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="w-full flex items-center px-4 py-2 text-white rounded-md transition-colors border border-orange-500" style={{backgroundColor: '#E58025'}}
+            className="w-full flex items-center px-4 py-2 text-white rounded-md transition-colors border border-orange-500" 
+            style={{backgroundColor: '#E58025'}}
+            suppressHydrationWarning
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -146,7 +158,8 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="fixed top-7 z-50 p-2 bg-white border border-gray-300 rounded-md shadow-md hover:bg-gray-50 transition-all duration-300"
-        style={{left: isOpen ? (window.innerWidth >= 768 ? '280px' : '24px') : '24px'}}
+        style={{left: isOpen ? '280px' : '24px'}}
+        suppressHydrationWarning
       >
         <svg className="w-6 h-6" fill="none" stroke="#E58025" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -163,8 +176,8 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
 
       {/* Logout Confirmation Modal */}
       {showLogoutModal && (
-        <div className="fixed inset-0 flex items-center justify-center z-50" style={{backgroundColor: 'rgba(0, 0, 0, 0.5)'}}>
-          <div className="bg-white rounded-lg p-4 md:p-6 max-w-sm w-full mx-4 shadow-xl">
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{backgroundColor: 'rgba(0, 0, 0, 0.5)'}} suppressHydrationWarning>
+          <div className="bg-white rounded-lg p-4 md:p-6 max-w-sm w-full mx-4 shadow-xl" suppressHydrationWarning>
             <div className="flex flex-col items-center text-center">
               <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mb-4">
                 <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,6 +200,7 @@ export default function Sidebar({ isOpen = false, setIsOpen = () => {} }) {
                   }}
                   className="flex-1 px-4 py-2 text-white rounded-md transition-colors"
                   style={{backgroundColor: '#FF8500'}}
+                  suppressHydrationWarning
                 >
                   Logout
                 </button>

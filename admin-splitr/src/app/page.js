@@ -65,6 +65,12 @@ export default function SplitrLogin() {
 
       console.log('Response status:', response.status);
       
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned HTML instead of JSON. Check API endpoint.');
+      }
+      
       const data = await response.json();
       console.log('Response data:', data);
 
@@ -93,8 +99,10 @@ export default function SplitrLogin() {
         console.log('SessionId cookie:', Cookies.get('sessionId'));
         console.log('User cookie:', Cookies.get('user'));
         
-        // Use router.push for proper Next.js navigation
-        router.push('/dashboard');
+        // Small delay to ensure cookies are set before navigation
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 100);
       } else {
         console.error('Login failed:', data);
         alert(data.error || data.message || 'Login failed');

@@ -13,15 +13,19 @@ export default function Transactions() {
   const [user, setUser] = useState({ name: "Loading...", role: "User" });
   const [isOpen, setIsOpen] = useState(false);
 
-  // Load user data from localStorage
+  // Load user data from cookies
   useEffect(() => {
-    const userData = localStorage.getItem("user");
+    const userData = Cookies.get("user");
     if (userData) {
-      const parsedUser = JSON.parse(userData);
-      setUser({
-        name: parsedUser.name || parsedUser.username || "Admin",
-        role: parsedUser.role || "Admin",
-      });
+      try {
+        const parsedUser = JSON.parse(userData);
+        setUser({
+          name: parsedUser.name || parsedUser.username || "Admin",
+          role: parsedUser.role || "Admin",
+        });
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+      }
     }
   }, []);
 
@@ -31,6 +35,10 @@ export default function Transactions() {
   const [statusFilter, setStatusFilter] = useState("");
   const [paymentMethodFilter, setPaymentMethodFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Sorting states
+  const [sortField, setSortField] = useState("");
+  const [sortDirection, setSortDirection] = useState("asc");
 
   // Dynamic transaction data from API
   const [transactions, setTransactions] = useState([]);
@@ -46,7 +54,7 @@ export default function Transactions() {
   const fetchTransactions = async (page = 1) => {
     try {
       setLoading(true);
-      const sessionId = localStorage.getItem("sessionId");
+      const sessionId = Cookies.get("sessionId");
 
       const params = {
         sessionId,
@@ -59,6 +67,10 @@ export default function Transactions() {
       if (statusFilter) params.status = statusFilter;
       if (paymentMethodFilter) params.payment_method = paymentMethodFilter;
       if (searchQuery) params.search = searchQuery;
+      if (sortField) {
+        params.sort_by = sortField;
+        params.sort_direction = sortDirection;
+      }
 
       const response = await axios.get("/api/transactions", { params });
 
@@ -80,7 +92,7 @@ export default function Transactions() {
   // Load transactions on component mount and when filters change
   useEffect(() => {
     fetchTransactions();
-  }, []);
+  }, [dateFrom, dateTo, statusFilter, paymentMethodFilter]);
 
   // Auto-apply filters when search query changes (with debounce)
   useEffect(() => {
@@ -93,8 +105,88 @@ export default function Transactions() {
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  // Use transactions directly since filtering is done by API
-  const filteredTransactions = transactions || [];
+  // Apply client-side sorting and searching
+  const filteredTransactions = useMemo(() => {
+    if (!transactions || transactions.length === 0) return [];
+    
+    let filtered = [...transactions];
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(transaction => {
+        const searchableFields = [
+          transaction.transaction_id || '',
+          transaction.sender?.name || '',
+          transaction.recipient?.name || '',
+          transaction.recipient?.branch_code || '',
+          transaction.payment_method || '',
+          transaction.status || '',
+          transaction.amount?.toString() || '',
+          transaction.transaction_date || ''
+        ];
+        
+        return searchableFields.some(field => 
+          field.toLowerCase().includes(query)
+        );
+      });
+    }
+    
+    // Apply sorting
+    if (sortField) {
+      filtered.sort((a, b) => {
+        let aValue, bValue;
+        
+        switch (sortField) {
+          case 'sender_name':
+            aValue = a.sender?.name || '';
+            bValue = b.sender?.name || '';
+            break;
+          case 'recipient_name':
+            aValue = a.recipient?.name || '';
+            bValue = b.recipient?.name || '';
+            break;
+          case 'amount':
+            aValue = a.amount || 0;
+            bValue = b.amount || 0;
+            break;
+          case 'transaction_date':
+            aValue = new Date(a.transaction_date || 0);
+            bValue = new Date(b.transaction_date || 0);
+            break;
+          case 'transaction_id':
+            aValue = a.transaction_id || '';
+            bValue = b.transaction_id || '';
+            break;
+          case 'payment_method':
+            aValue = a.payment_method || '';
+            bValue = b.payment_method || '';
+            break;
+          case 'status':
+            aValue = a.status || '';
+            bValue = b.status || '';
+            break;
+          case 'branch_code':
+            aValue = a.recipient?.branch_code || '';
+            bValue = b.recipient?.branch_code || '';
+            break;
+          default:
+            return 0;
+        }
+        
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          aValue = aValue.toLowerCase();
+          bValue = bValue.toLowerCase();
+        }
+        
+        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    
+    return filtered;
+  }, [transactions, sortField, sortDirection, searchQuery]);
 
   const resetFilters = () => {
     setDateFrom("");
@@ -102,6 +194,8 @@ export default function Transactions() {
     setStatusFilter("");
     setPaymentMethodFilter("");
     setSearchQuery("");
+    setSortField("");
+    setSortDirection("asc");
     // Fetch data again with no filters
     fetchTransactions(1);
   };
@@ -109,10 +203,42 @@ export default function Transactions() {
   const applyFilters = () => {
     fetchTransactions(1); // Reset to page 1 when applying filters
   };
+  
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+    // Don't fetch again, use client-side sorting
+  };
+  
+  const getSortButton = (field, label) => {
+    const isActive = sortField === field;
+    return (
+      <div className="flex items-center justify-center w-full">
+        <button
+          onClick={() => handleSort(field)}
+          className={`flex items-center justify-center gap-1 px-3 py-1 rounded text-sm font-semibold transition-colors w-full ${
+            isActive 
+              ? 'bg-white bg-opacity-20 text-black' 
+              : 'hover:bg-white hover:bg-opacity-10 text-black'
+          }`}
+        >
+          {label}
+          <span className={`text-sm ${isActive ? 'text-orange-600' : 'text-gray-600'}`}>
+            {!isActive ? '⇅' : sortDirection === 'asc' ? '↑' : '↓'}
+          </span>
+        </button>
+      </div>
+    );
+  };
 
   const exportCSV = async () => {
     try {
-      const sessionId = localStorage.getItem("sessionId");
+      // Try API export first
+      const sessionId = Cookies.get("sessionId");
       const params = { sessionId };
 
       if (dateFrom) params.date_from = dateFrom;
@@ -135,7 +261,56 @@ export default function Transactions() {
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
       console.error("CSV export error:", error);
-      alert("Failed to export CSV");
+      
+      // Fallback: Generate CSV manually from current data
+      try {
+        const dataToExport = filteredTransactions.length > 0 ? filteredTransactions : transactions;
+        
+        if (dataToExport.length === 0) {
+          alert("No data to export");
+          return;
+        }
+
+        // Create CSV content
+        const headers = [
+          "No",
+          "Transaction ID", 
+          "Date",
+          "Sender",
+          "Recipient", 
+          "Amount",
+          "Branch Code",
+          "Payment Method",
+          "Status"
+        ];
+        
+        const csvContent = [
+          headers.join(","),
+          ...dataToExport.map((transaction, index) => [
+            index + 1,
+            `"${transaction.transaction_id || "N/A"}"`,
+            `"${transaction.transaction_date || "N/A"}"`,
+            `"${transaction.sender?.name || "N/A"}"`,
+            `"${transaction.recipient?.name || "N/A"}"`,
+            `"Rp ${transaction.amount?.toLocaleString() || "0"}"`,
+            `"${transaction.recipient?.branch_code || "N/A"}"`,
+            `"${transaction.payment_method || "N/A"}"`,
+            `"${transaction.status || "N/A"}"`
+          ].join(","))
+        ].join("\n");
+
+        // Download CSV
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(downloadUrl);
+      } catch (fallbackError) {
+        console.error("Fallback CSV export error:", fallbackError);
+        alert("Failed to export CSV");
+      }
     }
   };
 
@@ -211,12 +386,24 @@ export default function Transactions() {
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case "Success":
+    const statusLower = status?.toLowerCase() || "";
+    
+    if (statusLower.includes("completed")) {
+      if (statusLower.includes("late")) {
+        return "bg-orange-100 text-orange-800";
+      } else if (statusLower.includes("scheduled")) {
+        return "bg-blue-100 text-blue-800";
+      } else {
         return "bg-green-100 text-green-800";
-      case "Pending":
+      }
+    }
+    
+    switch (statusLower) {
+      case "success":
+        return "bg-green-100 text-green-800";
+      case "pending":
         return "bg-yellow-100 text-yellow-800";
-      case "Failed":
+      case "failed":
         return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
@@ -318,23 +505,6 @@ export default function Transactions() {
                     />
                   </div>
 
-                  {/* Status Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Status
-                    </label>
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
-                    >
-                      <option value="">All Status</option>
-                      <option value="Pending">Pending</option>
-                      <option value="completed">Success</option>
-                      <option value="Failed">Failed</option>
-                    </select>
-                  </div>
-
                   {/* Payment Method Filter */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -348,6 +518,24 @@ export default function Transactions() {
                       <option value="">All Methods</option>
                       <option value="instant">Instant</option>
                       <option value="scheduled">Schedule</option>
+                    </select>
+                  </div>
+
+                  {/* Status Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Status
+                    </label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
+                    >
+                      <option value="">All Status</option>
+                      <option value="completed">Completed</option>
+                      <option value="completed_late">Completed Late</option>
+                      <option value="completed_scheduled">Completed Scheduled</option>
+                      <option value="failed">Failed</option>
                     </select>
                   </div>
                 </div>
@@ -421,7 +609,7 @@ export default function Transactions() {
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Search by name or account number"
+                    placeholder="Search by transaction ID, name, branch code, payment method, status, amount, or date"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
@@ -454,88 +642,72 @@ export default function Transactions() {
                   <div className="text-gray-500">No transactions found</div>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="overflow-x-auto rounded-lg shadow-sm">
+                  <table className="w-full border-collapse">
                     <thead style={{ backgroundColor: "#3FD8D4" }}>
                       <tr>
-                        <th className="px-6 py-3 text-center text-sm font-bold text-black uppercase tracking-wider">
+                        <th className="px-4 py-4 text-center text-sm font-semibold text-black border-r border-teal-300 align-middle">
                           No
                         </th>
-                        <th className="px-6 py-3 text-center text-sm font-bold text-black uppercase tracking-wider">
-                          Transaction ID
+                        <th className="px-4 py-4 text-center border-r border-teal-300 align-middle">
+                          {getSortButton("transaction_id", "Transaction ID")}
                         </th>
-                        <th className="px-6 py-3 text-center text-sm font-bold text-black uppercase tracking-wider">
-                          Transaction Date
+                        <th className="px-4 py-4 text-center border-r border-teal-300 align-middle">
+                          {getSortButton("transaction_date", "Date")}
                         </th>
-                        <th className="px-6 py-3 text-center text-sm font-bold text-black uppercase tracking-wider">
-                          Sender
+                        <th className="px-4 py-4 text-center border-r border-teal-300 align-middle">
+                          {getSortButton("sender_name", "Sender")}
                         </th>
-                        <th className="px-6 py-3 text-center text-sm font-bold text-black uppercase tracking-wider">
-                          Recipient
+                        <th className="px-4 py-4 text-center border-r border-teal-300 align-middle">
+                          {getSortButton("recipient_name", "Recipient")}
                         </th>
-                        <th className="px-6 py-3 text-center text-sm font-bold text-black uppercase tracking-wider">
-                          Amount
+                        <th className="px-4 py-4 text-center border-r border-teal-300 align-middle">
+                          {getSortButton("amount", "Amount")}
                         </th>
-                        <th className="px-6 py-3 text-center text-sm font-bold text-black uppercase tracking-wider">
-                          Branch Code
+                        <th className="px-4 py-4 text-center border-r border-teal-300 align-middle">
+                          {getSortButton("branch_code", "Branch Code")}
                         </th>
-                        <th className="px-6 py-3 text-center text-sm font-bold text-black uppercase tracking-wider">
-                          Payment Method
+                        <th className="px-4 py-4 text-center border-r border-teal-300 align-middle">
+                          {getSortButton("payment_method", "Payment Method")}
                         </th>
-                        <th className="px-6 py-3 text-center text-sm font-bold text-black uppercase tracking-wider">
-                          Status
+                        <th className="px-4 py-4 text-center align-middle">
+                          {getSortButton("status", "Status")}
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white">
                       {filteredTransactions.map((transaction, index) => (
                         <tr
                           key={transaction.transaction_id}
-                          className="hover:bg-gray-50"
+                          className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
                         >
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="font-medium text-gray-900">
-                              {(pagination.page - 1) * pagination.limit +
-                                index +
-                                1}
-                            </div>
+                          <td className="px-4 py-3 text-center text-sm font-medium text-gray-700 border-r border-gray-100">
+                            {(pagination.page - 1) * pagination.limit + index + 1}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="font-medium text-gray-900">
-                              {transaction.transaction_id}
-                            </div>
+                          <td className="px-4 py-3 text-center text-sm font-medium text-gray-900 border-r border-gray-100">
+                            {transaction.transaction_id}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                          <td className="px-4 py-3 text-center text-sm text-gray-600 border-r border-gray-100">
                             {transaction.transaction_date}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="font-medium text-gray-900">
-                              {transaction.sender?.name || "N/A"}
-                            </div>
+                          <td className="px-4 py-3 text-center text-sm font-medium text-gray-900 border-r border-gray-100">
+                            {transaction.sender?.name || "N/A"}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="font-medium text-gray-900">
-                              {transaction.recipient?.name || "N/A"}
-                            </div>
+                          <td className="px-4 py-3 text-center text-sm font-medium text-gray-900 border-r border-gray-100">
+                            {transaction.recipient?.name || "N/A"}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="font-semibold text-gray-900">
-                              Rp {transaction.amount?.toLocaleString() || "0"}
-                            </span>
+                          <td className="px-4 py-3 text-center text-sm font-semibold text-green-600 border-r border-gray-100">
+                            Rp {transaction.amount?.toLocaleString() || "0"}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="font-medium text-gray-900">
-                              {transaction.recipient?.branch_code || "N/A"}
-                            </span>
+                          <td className="px-4 py-3 text-center text-sm text-gray-600 border-r border-gray-100">
+                            {transaction.recipient?.branch_code || "N/A"}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="font-medium text-gray-900">
-                              {transaction.payment_method || "N/A"}
-                            </span>
+                          <td className="px-4 py-3 text-center text-sm font-medium text-gray-900 border-r border-gray-100">
+                            {transaction.payment_method || "N/A"}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <td className="px-4 py-3 text-center">
                             <span
-                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
+                              className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(
                                 transaction.status
                               )}`}
                             >

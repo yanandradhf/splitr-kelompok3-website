@@ -4,9 +4,8 @@ const BASE = BASEAPI + "/api/admin/dashboard/charts";
 
 export const periodMap = {
   "7d": "7days",
-  "30d": "30days",
-  this_month: "thismonth",
-  full_year: "year",
+  "this_month": "thismonth",
+  "this_year": "year",
 };
 
 const api = axios.create({
@@ -31,21 +30,41 @@ api.interceptors.request.use((config) => {
 });
 
 export const getTransactions = async (period) => {
-  const response = await api.get(`/transactions?period=${period}`);
-  return response.data;
+  try {
+    const response = await api.get(`/transactions?period=${period}`);
+    return response.data || { data: [] };
+  } catch (error) {
+    console.error('API Error - Transactions:', error);
+    return { data: [] };
+  }
 };
 
 export const getCategories = async (period) => {
-  const response = await api.get(`/categories?period=${period}`);
-  return response.data;
+  try {
+    const response = await api.get(`/categories?period=${period}`);
+    return response.data || { data: [] };
+  } catch (error) {
+    console.error('API Error - Categories:', error);
+    return { data: [] };
+  }
 };
 
 export const getPaymentMethods = async (period) => {
-  const response = await api.get(`/payment-methods?period=${period}`);
-  return response.data;
+  try {
+    const response = await api.get(`/payment-methods?period=${period}`);
+    return response.data || { data: [] };
+  } catch (error) {
+    console.error('API Error - Payment Methods:', error);
+    return { data: [] };
+  }
 };
 
 export const getDailyAmount = async (period) => {
-  const response = await api.get(`/daily-amount?period=${period}`);
-  return response.data;
+  try {
+    const response = await api.get(`/daily-amount?period=${period}`);
+    return response.data || { data: [] };
+  } catch (error) {
+    console.error('API Error - Daily Amount:', error);
+    return { data: [] };
+  }
 };

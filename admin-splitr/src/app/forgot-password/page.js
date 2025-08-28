@@ -46,7 +46,7 @@ export default function ForgotPassword() {
                 <img 
                   src="/assets/splitr.png"
                   alt="SPLITR Logo"
-                  className="h-30 object-contain"
+                  className="h-25 object-contain"
                 />
               </div>
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Forgot Password</h2>
