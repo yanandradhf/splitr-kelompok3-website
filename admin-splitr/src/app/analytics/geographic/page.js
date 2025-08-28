@@ -27,6 +27,19 @@ export default function GeographicAnalytics() {
       link.rel = 'stylesheet';
       link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
       document.head.appendChild(link);
+      
+      // Override Leaflet z-index
+      const style = document.createElement('style');
+      style.textContent = `
+        .leaflet-container {
+          z-index: 1 !important;
+        }
+        .leaflet-control-container {
+          z-index: 2 !important;
+        }
+      `;
+      document.head.appendChild(style);
+      
       setMapLoaded(true);
     }
   }, []);
@@ -96,12 +109,12 @@ export default function GeographicAnalytics() {
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">
                       Indonesia Branch Heatmap
                     </h3>
-                    <div className="h-96 rounded-lg overflow-hidden">
+                    <div className="h-96 rounded-lg overflow-hidden relative" style={{ zIndex: 1 }}>
                       {mapLoaded ? (
                         <MapContainer
                           center={[-2.5, 118]}
                           zoom={5}
-                          style={{ height: '100%', width: '100%' }}
+                          style={{ height: '100%', width: '100%', zIndex: 1 }}
                         >
                           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                           {data.heatmapData?.map((branch, index) => {
